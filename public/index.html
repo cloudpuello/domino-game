@@ -1,57 +1,54 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="UTF-8">
-  <title>Domino Game</title>
-  <style>
-    body {
-      font-family: sans-serif;
-      padding: 1rem;
-    }
-    #board {
-      display: flex;
-      flex-wrap: nowrap;
-      margin: 0.5rem 0;
-    }
-    #hand {
-      display: flex;
-      flex-wrap: wrap;
-      margin: 0.5rem 0;
-    }
-    .tile {
-      display: inline-block;
-      border: 1px solid #333;
-      padding: 4px 6px;
-      margin: 2px;
-      cursor: pointer;
-      user-select: none;
-    }
-    .tile.disabled {
-      opacity: 0.3;
-      cursor: not-allowed;
-    }
-  </style>
+  <meta charset="UTF-8" />
+  <title>Dominican Domino</title>
 </head>
 <body>
-  <h1>Domino Game</h1>
+  <h1>Dominican Domino</h1>
+
+  <!-- whose turn / status -->
   <p id="status">Connecting…</p>
 
-  <!-- Lobby area -->
-  <div id="lobby">
-    <strong>Lobby:</strong>
-    <ul id="lobbyList"></ul>
+  <!-- TOP opponent -->
+  <div><strong>Top Opponent (seat ?)</strong>
+    <div id="topPlayer"></div>
   </div>
 
-  <!-- Board display -->
-  <div>
-    <strong>Board:</strong>
-    <div id="board"></div>
+  <!-- main area: left | board | right -->
+  <div style="display:flex;justify-content:center;align-items:flex-start;gap:2rem">
+    <div><strong>Left Opponent</strong>
+      <div id="leftPlayer"></div>
+    </div>
+
+    <div>
+      <strong>Board</strong>
+      <div id="board"></div>
+    </div>
+
+    <div><strong>Right Opponent</strong>
+      <div id="rightPlayer"></div>
+    </div>
   </div>
 
-  <!-- Player hand display -->
-  <div>
-    <strong>Your Hand:</strong>
-    <div id="hand"></div>
+  <!-- YOUR hand -->
+  <div><strong>Your Hand</strong>
+    <div id="yourHand"></div>
+  </div>
+
+  <!-- scores -->
+  <div><strong>Scores (0&2 vs 1&3):</strong>
+    <span id="scores"></span>
+  </div>
+
+  <!-- game messages -->
+  <div><strong>Game Events:</strong>
+    <div id="messages"></div>
+  </div>
+
+  <!-- optional pip counts -->
+  <div><strong>Pip Counts:</strong>
+    <div id="pipCounts"></div>
   </div>
 
   <button onclick="passTurn()">Pass Turn</button>
@@ -60,4 +57,3 @@
   <script src="client.js"></script>
 </body>
 </html>
-
