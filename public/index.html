@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Domino Game</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 1rem;
+    }
+    #board {
+      display: flex;
+      flex-wrap: nowrap;
+      margin: 0.5rem 0;
+    }
+    #hand {
+      display: flex;
+      flex-wrap: wrap;
+      margin: 0.5rem 0;
+    }
+    .tile {
+      display: inline-block;
+      border: 1px solid #333;
+      padding: 4px 6px;
+      margin: 2px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .tile.disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+  <h1>Domino Game</h1>
+  <p id="status">Connecting…</p>
+
+  <!-- Lobby area -->
+  <div id="lobby">
+    <strong>Lobby:</strong>
+    <ul id="lobbyList"></ul>
+  </div>
+
+  <!-- Board display -->
+  <div>
+    <strong>Board:</strong>
+    <div id="board"></div>
+  </div>
+
+  <!-- Player hand display -->
+  <div>
+    <strong>Your Hand:</strong>
+    <div id="hand"></div>
+  </div>
+
+  <button onclick="passTurn()">Pass Turn</button>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="client.js"></script>
+</body>
+</html>
+
