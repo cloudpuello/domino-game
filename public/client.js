@@ -1,5 +1,5 @@
 /* =========================================================================
-   client.js — Dominican Domino with Auto-Room Join  (v1.1 - UI tweaks)
+   client.js — Dominican Domino with Auto-Pass + UI Updates
    ========================================================================= */
 
 // ——— Socket & basic state ————————————————————————————
@@ -14,20 +14,23 @@ let boardState  = [];
 let scores      = [0, 0];   // [team0&2, team1&3]
 
 // ——— DOM handles ————————————————————————————————
-const statusEl   = document.getElementById('status');
-const boardEl    = document.getElementById('board');
-const handEl     = document.getElementById('hand');
-const lobbyListEl= document.getElementById('lobbyList');
-const scoresEl   = document.getElementById('scores');
+const statusEl     = document.getElementById('status');
+const boardEl      = document.getElementById('board');
+const handEl       = document.getElementById('hand');
+const lobbyListEl  = document.getElementById('lobbyList');
+const scoresEl     = document.getElementById('scores');
 const playerInfoEl = document.getElementById('playerInfo');
-const errorsEl   = document.getElementById('errors');
-const passBtn    = document.getElementById('passBtn');      // <— NEW
+const errorsEl     = document.getElementById('errors');
+const passBtn      = document.getElementById('passBtn');
+
+// Hide pass button by default
+if (passBtn) passBtn.style.display = 'none';
 
 // Ask server for a room
 socket.emit('findRoom', { playerName });
 
 /* ---------- Helpers ---------- */
-const setStatus  = msg => statusEl.textContent = msg;
+const setStatus = msg => statusEl.textContent = msg;
 
 function showError(msg) {
   errorsEl.textContent = msg;
@@ -66,8 +69,9 @@ function renderHand() {
 
 /* ---------- Moves ---------- */
 function playTile(idx) {
+  if (currentTurn !== mySeat) return;
   const tile = myHand[idx];
-  let side = prompt('Side to play? (left/right)  (blank = auto):');
+  let side = prompt('Side to play? (left/right) (blank=auto):');
   if (side !== 'left' && side !== 'right') side = null;
   socket.emit('playTile', { roomId, seat: mySeat, tile, side });
 }
@@ -76,7 +80,7 @@ function passTurn() {
   if (currentTurn !== mySeat) return;
   socket.emit('passTurn', { roomId, seat: mySeat });
 }
-passBtn.onclick = passTurn;        // wire button
+if (passBtn) passBtn.onclick = passTurn;
 
 /* ---------- Socket events ---------- */
 socket.on('roomAssigned', ({ room }) => {
@@ -103,7 +107,9 @@ socket.on('gameStart', ({ yourHand, startingSeat, scores: s }) => {
 
   scoresEl.textContent = `Team 0&2: ${scores[0]} — Team 1&3: ${scores[1]}`;
   setStatus(currentTurn === mySeat ? 'Your turn!' : `Waiting for seat ${currentTurn}`);
-  renderBoard();  renderHand();
+  renderBoard();  
+  renderHand();
+  if (passBtn) passBtn.style.display = 'none';
 });
 
 /* --- live updates --- */
@@ -114,23 +120,27 @@ socket.on('broadcastMove', ({ board }) => {
 
 socket.on('turnChanged', (turn) => {
   currentTurn = turn;
-  errorsEl.textContent = '';            // auto-clear old errors  (NEW)
+  errorsEl.textContent = '';
   setStatus(currentTurn === mySeat ? 'Your turn!' : `Waiting for seat ${currentTurn}`);
   renderHand();
+  if (passBtn) passBtn.style.display = 'none';
 });
 
-socket.on('playerPassed', seat => console.log(`Seat ${seat} passed.`));
+socket.on('playerPassed', seat => {
+  console.log(`Seat ${seat} passed.`);
+  if (seat === mySeat && passBtn) passBtn.style.display = 'none';
+});
 
 socket.on('roundEnded', ({ winner, reason, points, scores: s, board, capicua, paso }) => {
   boardState = board;
   scores     = s;
   renderBoard();
   scoresEl.textContent = `Team 0&2: ${scores[0]} — Team 1&3: ${scores[1]}`;
-
   let msg = `Seat ${winner} wins (${reason}) — +${points} pts.`;
   if (capicua) msg += ' Capicú!';
   if (paso)    msg += ' Paso!';
-  setStatus(msg);                                        // shows bonus flags  (NEW)
+  setStatus(msg);
+  if (passBtn) passBtn.style.display = 'none';
 });
 
 socket.on('gameOver', ({ winningTeam, scores }) => {
@@ -140,3 +150,11 @@ socket.on('gameOver', ({ winningTeam, scores }) => {
 
 socket.on('errorMessage', showError);
 socket.on('message',     msg => console.log('Server:', msg));
+
+/* --- NEW: Server tells you you must pass --- */
+socket.on('allowPass', () => {
+  if (passBtn && currentTurn === mySeat) {
+    passBtn.style.display = 'inline-block';
+    setStatus('No playable tiles — you must pass.');
+  }
+});

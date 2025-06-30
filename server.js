@@ -1,5 +1,5 @@
 /* ============================================================================
-   server.js — Dominican Domino (Clean, Rule-Compliant)
+   server.js — Dominican Domino (Auto-Pass & No Duplicate Tiles)
    ========================================================================= */
 
 const express = require('express');
@@ -26,7 +26,7 @@ function nextSeat(s) {
 /* ---------- Helpers ---------- */
 function createRoom(id) {
   rooms[id] = {
-    players: {},  // seat -> { socketId, hand, name }
+    players: {},
     started: false,
     board: [],
     leftEnd: null,
@@ -37,13 +37,18 @@ function createRoom(id) {
     passes: 0,
     isFirst: true,
     lastWinner: null,
-    scores: [0,0]
+    scores: [0,0],
+    passTimer: null
   };
 }
 
 function newDeck() {
   const tiles = [];
-  for (let i=0;i<=6;i++) for (let j=i;j<=6;j++) tiles.push([i,j]);
+  for (let i=0;i<=6;i++) {
+    for (let j=i;j<=6;j++) {
+      tiles.push([i,j]);
+    }
+  }
   for (let i=tiles.length-1;i;i--) {
     const j = Math.floor(Math.random()*(i+1));
     [tiles[i], tiles[j]] = [tiles[j], tiles[i]];
@@ -81,6 +86,7 @@ function resetRound(roomId, room) {
     turn: room.lastWinner ?? 0,
     isFirst:false
   });
+  if (room.passTimer) clearTimeout(room.passTimer);
   for (const s in room.players) {
     io.to(room.players[s].socketId).emit('gameStart',{
       yourHand: room.players[s].hand,
@@ -129,6 +135,7 @@ io.on('connection', socket => {
         });
       }
       io.in(roomId).emit('turnChanged',starter);
+      startTurnTimer(roomId, room);
     }
   });
 
@@ -136,6 +143,9 @@ io.on('connection', socket => {
   socket.on('playTile',({roomId,seat,tile,side})=>{
     const room=rooms[roomId]; if(!room||!room.started)return;
     if(room.turn!==seat){socket.emit('errorMessage','Not your turn');return;}
+
+    if (room.passTimer) { clearTimeout(room.passTimer); room.passTimer=null; }
+
     const endsBefore=[room.leftEnd,room.rightEnd];
     if(room.board.length===0){
       if(room.isFirst&&!(tile[0]===6&&tile[1]===6)){
@@ -196,9 +206,8 @@ io.on('connection', socket => {
       resetRound(roomId,room);return;
     }
 
-    room.turn=nextSeat(room.turn);
-    io.in(roomId).emit('broadcastMove',{seat,tile,side,board:room.board});
-    io.in(roomId).emit('turnChanged',room.turn);
+    // Advance turn
+    advanceTurn(roomId, room);
   });
 
   /* ───────── Pass turn ───────── */
@@ -206,16 +215,11 @@ io.on('connection', socket => {
     const room=rooms[roomId]; if(!room||!room.started)return;
     if(room.turn!==seat){socket.emit('errorMessage','Not your turn');return;}
 
-    // Enforce no passing with playable tiles
-    const hasPlayable=room.players[seat].hand.some(
-      ([x,y])=>x===room.leftEnd||y===room.leftEnd||x===room.rightEnd||y===room.rightEnd
-    );
-    if(hasPlayable){
-      socket.emit('errorMessage','You must play a tile if you have one.');
-      return;
-    }
+    if (room.passTimer) { clearTimeout(room.passTimer); room.passTimer=null; }
 
     room.passes++;
+    io.in(roomId).emit('playerPassed',seat);
+
     if(room.passes===4){
       const closingSeat=room.lastPlayer;
       const nextCCW=nextSeat(closingSeat);
@@ -236,9 +240,7 @@ io.on('connection', socket => {
       resetRound(roomId,room);return;
     }
 
-    room.turn=nextSeat(room.turn);
-    io.in(roomId).emit('playerPassed',seat);
-    io.in(roomId).emit('turnChanged',room.turn);
+    advanceTurn(roomId, room);
   });
 
   /* ───────── Disconnect cleanup ───────── */
@@ -252,6 +254,72 @@ io.on('connection', socket => {
     }
   });
 });
+
+/* ───────── Helpers ───────── */
+function advanceTurn(roomId, room){
+  if (room.passTimer) { clearTimeout(room.passTimer); room.passTimer=null; }
+  while(true){
+    room.turn=nextSeat(room.turn);
+    const nextHand=room.players[room.turn].hand;
+    const canPlay=nextHand.some(([x,y])=>
+      x===room.leftEnd||y===room.leftEnd||x===room.rightEnd||y===room.rightEnd
+    );
+    if(canPlay){
+      io.in(roomId).emit('turnChanged',room.turn);
+      room.passTimer=setTimeout(()=>{
+        io.in(roomId).emit('playerPassed',room.turn);
+        room.passes++;
+        if(room.passes===4){
+          const closingSeat=room.lastPlayer;
+          const nextCCW=nextSeat(closingSeat);
+          const closingPips=handSum(room.players[closingSeat].hand);
+          const nextPips=handSum(room.players[nextCCW].hand);
+          const winnerSeat=closingPips<=nextPips?closingSeat:nextCCW;
+          const winnerTeam=winnerSeat%2;
+          const points=Object.values(room.players).reduce((s,p)=>s+handSum(p.hand),0);
+          room.scores[winnerTeam]+=points; room.lastWinner=winnerSeat;
+          io.in(roomId).emit('roundEnded',{
+            winner:winnerSeat,reason:'Tranca',
+            points,scores:room.scores,board:room.board
+          });
+          if(room.scores[winnerTeam]>=200){
+            io.in(roomId).emit('gameOver',{winningTeam:winnerTeam,scores:room.scores});
+            delete rooms[roomId];return;
+          }
+          resetRound(roomId,room);
+        }else{
+          advanceTurn(roomId, room);
+        }
+      },90000);
+      break;
+    } else {
+      io.in(roomId).emit('playerPassed',room.turn);
+      room.passes++;
+      if(room.passes===4){
+        const closingSeat=room.lastPlayer;
+        const nextCCW=nextSeat(closingSeat);
+        const closingPips=handSum(room.players[closingSeat].hand);
+        const nextPips=handSum(room.players[nextCCW].hand);
+        const winnerSeat=closingPips<=nextPips?closingSeat:nextCCW;
+        const winnerTeam=winnerSeat%2;
+        const points=Object.values(room.players).reduce((s,p)=>s+handSum(p.hand),0);
+        room.scores[winnerTeam]+=points; room.lastWinner=winnerSeat;
+        io.in(roomId).emit('roundEnded',{
+          winner:winnerSeat,reason:'Tranca',
+          points,scores:room.scores,board:room.board
+        });
+        if(room.scores[winnerTeam]>=200){
+          io.in(roomId).emit('gameOver',{winningTeam:winnerTeam,scores:room.scores});
+          delete rooms[roomId];return;
+        }
+        resetRound(roomId,room);
+        return;
+      } else {
+        continue;
+      }
+    }
+  }
+}
 
 /* ───────── Start server ───────── */
 server.listen(PORT,()=>console.log(`Domino server running on port ${PORT}`));
