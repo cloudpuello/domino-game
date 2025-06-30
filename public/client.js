@@ -1,39 +1,39 @@
 /* =========================================================================
-   client.js — Dominican Domino with Auto-Room Join
+   client.js — Dominican Domino with Auto-Room Join  (v1.1 - UI tweaks)
    ========================================================================= */
 
-// Create socket connection
+// ——— Socket & basic state ————————————————————————————
 const socket = io();
-
-// Prompt for player name only
 const playerName = prompt('Enter your name:') || 'Anonymous';
 
-// State
-let roomId = null;
-let mySeat = null;
+let roomId      = null;
+let mySeat      = null;
 let currentTurn = null;
-let myHand = [];
-let boardState = [];
-let scores = [0, 0]; // [team0&2, team1&3]
+let myHand      = [];
+let boardState  = [];
+let scores      = [0, 0];   // [team0&2, team1&3]
 
-// DOM elements
-const statusEl = document.getElementById('status');
-const boardEl = document.getElementById('board');
-const handEl = document.getElementById('hand');
-const lobbyListEl = document.getElementById('lobbyList');
-const scoresEl = document.getElementById('scores');
+// ——— DOM handles ————————————————————————————————
+const statusEl   = document.getElementById('status');
+const boardEl    = document.getElementById('board');
+const handEl     = document.getElementById('hand');
+const lobbyListEl= document.getElementById('lobbyList');
+const scoresEl   = document.getElementById('scores');
+const playerInfoEl = document.getElementById('playerInfo');
+const errorsEl   = document.getElementById('errors');
+const passBtn    = document.getElementById('passBtn');      // <— NEW
 
-// Ask server to assign a room
+// Ask server for a room
 socket.emit('findRoom', { playerName });
 
-/* Helpers */
+/* ---------- Helpers ---------- */
+const setStatus  = msg => statusEl.textContent = msg;
 
-// Update status text
-function setStatus(msg) {
-  statusEl.textContent = msg;
+function showError(msg) {
+  errorsEl.textContent = msg;
+  setTimeout(() => { errorsEl.textContent = ''; }, 4000);
 }
 
-// Render lobby player list
 function renderLobby(players) {
   lobbyListEl.innerHTML = '';
   players.forEach(p => {
@@ -43,120 +43,100 @@ function renderLobby(players) {
   });
 }
 
-// Render the board horizontally
 function renderBoard() {
   boardEl.innerHTML = '';
   boardState.forEach(tile => {
-    const div = document.createElement('div');
-    div.className = 'tile disabled';
-    div.textContent = `${tile[0]}|${tile[1]}`;
-    boardEl.appendChild(div);
+    const d = document.createElement('div');
+    d.className = 'tile disabled';
+    d.textContent = `${tile[0]}|${tile[1]}`;
+    boardEl.appendChild(d);
   });
 }
 
-// Render your hand
 function renderHand() {
   handEl.innerHTML = '';
-  myHand.forEach((tile, index) => {
-    const div = document.createElement('div');
-    div.className = 'tile' + (currentTurn === mySeat ? '' : ' disabled');
-    div.textContent = `${tile[0]}|${tile[1]}`;
-    if (currentTurn === mySeat) {
-      div.onclick = () => playTile(index);
-    }
-    handEl.appendChild(div);
+  myHand.forEach((tile, idx) => {
+    const d = document.createElement('div');
+    d.className = 'tile' + (currentTurn === mySeat ? ' your-turn' : ' disabled');
+    d.textContent = `${tile[0]}|${tile[1]}`;
+    if (currentTurn === mySeat) d.onclick = () => playTile(idx);
+    handEl.appendChild(d);
   });
 }
 
-// Play a tile
-function playTile(index) {
-  const tile = myHand[index];
-  let side = prompt('Side to play? (left/right) — leave blank for auto:');
+/* ---------- Moves ---------- */
+function playTile(idx) {
+  const tile = myHand[idx];
+  let side = prompt('Side to play? (left/right)  (blank = auto):');
   if (side !== 'left' && side !== 'right') side = null;
   socket.emit('playTile', { roomId, seat: mySeat, tile, side });
 }
 
-// Pass turn
 function passTurn() {
   if (currentTurn !== mySeat) return;
   socket.emit('passTurn', { roomId, seat: mySeat });
 }
+passBtn.onclick = passTurn;        // wire button
 
-/* Socket events */
-
-// Server assigns you a room
+/* ---------- Socket events ---------- */
 socket.on('roomAssigned', ({ room }) => {
   roomId = room;
-  console.log(`Joined room: ${roomId}`);
-  setStatus(`Joined room: ${roomId}. Waiting for others...`);
+  setStatus(`Joined room: ${roomId}. Waiting for others…`);
 });
 
-// After joining, receive your seat
 socket.on('roomJoined', ({ seat }) => {
   mySeat = seat;
+  playerInfoEl.textContent =
+    `You are Seat ${mySeat} (Team ${mySeat % 2 === 0 ? '0&2' : '1&3'})`;
 });
 
-// Lobby updates
 socket.on('lobbyUpdate', ({ players, seatsRemaining }) => {
   renderLobby(players);
-  setStatus(`Waiting for players (${seatsRemaining} seat${seatsRemaining !== 1 ? 's' : ''} left)`);
+  setStatus(`Waiting for players (${seatsRemaining} seat${seatsRemaining!==1?'s':''} left)`);
 });
 
-// Game starts
 socket.on('gameStart', ({ yourHand, startingSeat, scores: s }) => {
-  myHand = yourHand;
-  boardState = [];
-  scores = s;
+  myHand      = yourHand;
+  boardState  = [];
+  scores      = s;
   currentTurn = startingSeat;
+
   scoresEl.textContent = `Team 0&2: ${scores[0]} — Team 1&3: ${scores[1]}`;
   setStatus(currentTurn === mySeat ? 'Your turn!' : `Waiting for seat ${currentTurn}`);
-  renderBoard();
-  renderHand();
+  renderBoard();  renderHand();
 });
 
-// A move was played
-socket.on('broadcastMove', ({ seat, tile, side, board }) => {
+/* --- live updates --- */
+socket.on('broadcastMove', ({ board }) => {
   boardState = board;
   renderBoard();
 });
 
-// Turn changed
-socket.on('turnChanged', turn => {
+socket.on('turnChanged', (turn) => {
   currentTurn = turn;
+  errorsEl.textContent = '';            // auto-clear old errors  (NEW)
   setStatus(currentTurn === mySeat ? 'Your turn!' : `Waiting for seat ${currentTurn}`);
   renderHand();
 });
 
-// A player passed
-socket.on('playerPassed', seat => {
-  console.log(`Seat ${seat} passed.`);
-});
+socket.on('playerPassed', seat => console.log(`Seat ${seat} passed.`));
 
-// Round ended
-socket.on('roundEnded', ({ winner, reason, points, scores: s, board }) => {
+socket.on('roundEnded', ({ winner, reason, points, scores: s, board, capicua, paso }) => {
   boardState = board;
-  scores = s;
-  scoresEl.textContent = `Team 0&2: ${scores[0]} — Team 1&3: ${scores[1]}`;
+  scores     = s;
   renderBoard();
-  if (winner !== null) {
-    setStatus(`Seat ${winner} wins (${reason}) — +${points} points.`);
-  } else {
-    setStatus(`Round ended (${reason}).`);
-  }
+  scoresEl.textContent = `Team 0&2: ${scores[0]} — Team 1&3: ${scores[1]}`;
+
+  let msg = `Seat ${winner} wins (${reason}) — +${points} pts.`;
+  if (capicua) msg += ' Capicú!';
+  if (paso)    msg += ' Paso!';
+  setStatus(msg);                                        // shows bonus flags  (NEW)
 });
 
-// Game over
 socket.on('gameOver', ({ winningTeam, scores }) => {
   alert(`Game over! Team ${winningTeam} wins.\nScores: ${scores.join(' / ')}`);
   setStatus('Game over.');
 });
 
-// Error messages
-socket.on('errorMessage', msg => {
-  alert(msg);
-});
-
-// General server messages
-socket.on('message', msg => {
-  console.log('Server:', msg);
-});
+socket.on('errorMessage', showError);
+socket.on('message',     msg => console.log('Server:', msg));
