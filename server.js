@@ -1,6 +1,6 @@
 /* ============================================================================
-   server.js — Dominican Domino (Full Rules, All Fixes)
-   ========================================================================= */
+ *  server.js — Dominican Domino (Full Rules + pipCounts restored)
+ *  ========================================================================= */
 
 const express = require('express');
 const http    = require('http');
@@ -8,272 +8,439 @@ const { Server } = require('socket.io');
 
 const app    = express();
 const server = http.createServer(app);
-const io     = new Server(server);
+const io     = new Server(server, { cors: { origin: '*' } });
 const PORT   = 3000;
 
 app.use(express.static('public'));
 
-const rooms = {};
-let roomCounter = 1;
-
-/* ---------- Turn order: 0 ➜ 3 ➜ 2 ➜ 1 ---------- */
+/* -------------------------------------------------------------------------- */
+/*  Helpers & constants                                                       */
+/* -------------------------------------------------------------------------- */
 const turnOrder = [0, 3, 2, 1];
-const nextSeat  = s => turnOrder[(turnOrder.indexOf(s)+1)%4];
+const nextSeat  = seat => turnOrder[(turnOrder.indexOf(seat) + 1) % 4];
+const teamOf    = seat => seat % 2;
 
-/* ---------- Helpers ---------- */
-function createRoom(id){
-  rooms[id] = {
-    players   : {},
-    started   : false,
-    board     : [],
-    leftEnd   : null,
-    rightEnd  : null,
-    pipCounts : {0:0,1:0,2:0,3:0,4:0,5:0,6:0},
-    turn      : null,
-    turnStartSeat: null,
-    lastPlayer: null,
-    passes    : 0,
-    isFirst   : true,
-    lastWinner: null,
-    scores    : [0,0],
-    passTimer : null
-  };
-}
-
-function newDeck(){
-  const d=[];
-  for(let i=0;i<=6;i++) for(let j=i;j<=6;j++) d.push([i,j]);
-  for(let i=d.length-1;i;i--){
-    const j=Math.floor(Math.random()*(i+1));
-    [d[i],d[j]]=[d[j],d[i]];
+/* -------------------------------------------------------------------------- */
+/*  Player class                                                              */
+/* -------------------------------------------------------------------------- */
+class Player {
+  constructor(socketId, name, seat) {
+    this.socketId   = socketId;
+    this.name       = name;
+    this.seat       = seat;
+    this.hand       = [];
+    this.isConnected = true;
   }
-  return d;
+  handSum() { return this.hand.reduce((s,[a,b]) => s+a+b, 0); }
 }
 
-const handSum = h => h.reduce((s,[x,y])=>s+x+y,0);
+/* -------------------------------------------------------------------------- */
+/*  Room factory                                                              */
+/* -------------------------------------------------------------------------- */
+let roomCounter = 1;
+const rooms     = {};
 
-function dealHands(room){
-  const deck=newDeck();
-  const seats=Object.keys(room.players);
-  seats.forEach((s,i)=>{
-    room.players[s].hand = deck.slice(i*7,i*7+7);
+function createRoom(id) {
+  rooms[id] = {
+    id,
+    players       : {},
+    started       : false,
+
+    /* round-state */
+    board         : [],
+    leftEnd       : null,
+    rightEnd      : null,
+    pipCounts     : {0:0,1:0,2:0,3:0,4:0,5:0,6:0},
+    turn          : null,
+    turnStarter   : null,
+    lastMoverSeat : null,
+    passCount     : 0,
+    isRoundOver   : false,
+
+    /* meta */
+    isFirstRound  : true,
+    lastWinnerSeat: null,
+    scores        : [0,0],
+
+    passTimer     : null,
+    reconnectTimers: {},   // seat ➜ timerId
+  };
+  return rooms[id];
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Domino helpers                                                            */
+/* -------------------------------------------------------------------------- */
+function newDeck() {
+  const deck = [];
+  for (let i=0;i<=6;i++) for (let j=i;j<=6;j++) deck.push([i,j]);
+  for (let i=deck.length-1;i;i--) {
+    const j = Math.floor(Math.random()*(i+1));
+    [deck[i], deck[j]] = [deck[j], deck[i]];
+  }
+  return deck;
+}
+
+function dealHands(room) {
+  const deck = newDeck();
+  Object.values(room.players).forEach((p,i) => {
+    p.hand = deck.slice(i*7, i*7+7);
   });
 }
 
-function placeTile(room,tile,sideHint){
-  let [a,b]=tile, side=sideHint;
-  if(!side) side = (a===room.rightEnd||b===room.rightEnd) ? 'right' : 'left';
-  if(side==='left'){
-    if(a===room.leftEnd){ room.board.unshift([b,a]); room.leftEnd=b; }
-    else if(b===room.leftEnd){ room.board.unshift([a,b]); room.leftEnd=a; }
-    else return false;
-  }else{
-    if(a===room.rightEnd){ room.board.push([a,b]); room.rightEnd=b; }
-    else if(b===room.rightEnd){ room.board.push([b,a]); room.rightEnd=a; }
-    else return false;
+function placeTile(room, tile, sideHint) {
+  let [a,b] = tile, side = sideHint;
+
+  const fitsLeft  = a===room.leftEnd  || b===room.leftEnd;
+  const fitsRight = a===room.rightEnd || b===room.rightEnd;
+  if (!fitsLeft && !fitsRight) return false;
+
+  if (!side) side = fitsRight ? 'right' : 'left';
+
+  if (side === 'left') {
+    if (!fitsLeft) return false;
+    if (a===room.leftEnd){ room.board.unshift([b,a]); room.leftEnd=b; }
+    else                 { room.board.unshift([a,b]); room.leftEnd=a; }
+  } else {
+    if (!fitsRight) return false;
+    if (a===room.rightEnd){ room.board.push([a,b]); room.rightEnd=b; }
+    else                  { room.board.push([b,a]); room.rightEnd=a; }
   }
   return true;
 }
 
-/* ---------- Timers ---------- */
-function startTurnTimer(roomId,room){
-  if(room.passTimer) clearTimeout(room.passTimer);
-  room.passTimer=setTimeout(()=>{
-    io.in(roomId).emit('playerPassed', room.turn);
-    room.passes++;
-    advanceTurn(roomId,room);
-  },90_000);
+/* -------------------------------------------------------------------------- */
+/*  Timers                                                                    */
+/* -------------------------------------------------------------------------- */
+const TURN_MS = 90_000;
+function startTurnTimer(room) {
+  if (room.passTimer) clearTimeout(room.passTimer);
+  room.passTimer = setTimeout(() => {
+    io.in(room.id).emit('playerPassed', { seat: room.turn, reason:'timeout' });
+    room.passCount++;
+    stepTurn(room);
+  }, TURN_MS);
 }
 
-function advanceTurn(roomId,room){
-  if(room.passTimer) clearTimeout(room.passTimer);
-  while(true){
-    room.turn = nextSeat(room.turn);
-    const hand = room.players[room.turn].hand;
-    const playable = hand.some(([x,y])=>
-      x===room.leftEnd||y===room.leftEnd||x===room.rightEnd||y===room.rightEnd);
-    if(playable){
-      io.in(roomId).emit('turnChanged',room.turn);
-      startTurnTimer(roomId,room);
-      break;
-    }else{
-      io.in(roomId).emit('playerPassed',room.turn);
-      room.passes++;
-      if(room.passes===4){ handleTranca(roomId,room); return; }
-    }
+/* -------------------------------------------------------------------------- */
+/*  Turn advancement (single, event-driven step)                              */
+/* -------------------------------------------------------------------------- */
+function stepTurn(room) {
+  if (room.passTimer) clearTimeout(room.passTimer);
+
+  room.turn = nextSeat(room.turn);
+  const player = room.players[room.turn];
+
+  /* Auto-pass if seat disconnected */
+  if (!player.isConnected) {
+    room.passCount++;
+    io.in(room.id).emit('playerPassed', { seat: room.turn, reason:'disconnected' });
+    return room.passCount===4 ? handleTranca(room) : setImmediate(()=>stepTurn(room));
+  }
+
+  const canPlay = player.hand.some(([x,y]) =>
+      x===room.leftEnd || y===room.leftEnd || x===room.rightEnd || y===room.rightEnd);
+
+  if (canPlay) {
+    room.passCount = 0;
+    io.in(room.id).emit('turnChanged', room.turn);
+    startTurnTimer(room);
+  } else {
+    room.passCount++;
+    io.in(room.id).emit('playerPassed', { seat: room.turn });
+    if (room.passCount===4) handleTranca(room);
+    else setImmediate(()=>stepTurn(room));
   }
 }
 
-function handleTranca(roomId,room){
-  const closer   = room.lastPlayer;
-  const nextCCW  = nextSeat(closer);
-  const closerP  = handSum(room.players[closer].hand);
-  const nextP    = handSum(room.players[nextCCW].hand);
-  const winner   = closerP<=nextP ? closer : nextCCW;
-  const team     = winner%2;
-  const points   = Object.values(room.players).reduce((s,p)=>s+handSum(p.hand),0);
-
-  room.scores[team]+=points;
-  room.lastWinner = winner;
-
-  io.in(roomId).emit('roundEnded',{
-    winner,reason:'Tranca',points,
-    scores:room.scores,board:room.board
-  });
-  endOrReset(roomId,room,team);
+/* -------------------------------------------------------------------------- */
+/*  Round / scoring helpers                                                   */
+/* -------------------------------------------------------------------------- */
+function broadcastHands(room) {
+  const hands = Object.values(room.players).map(p => ({ seat:p.seat, hand:p.hand }));
+  io.in(room.id).emit('showFinalHands', hands);
 }
 
-function resetRound(roomId,room){
-  dealHands(room);
-  Object.assign(room,{
-    board:[],leftEnd:null,rightEnd:null,
-    pipCounts:{0:0,1:0,2:0,3:0,4:0,5:0,6:0},
-    passes:0,lastPlayer:null,isFirst:false,
-    turn:room.lastWinner ?? 0
-  });
-  room.turnStartSeat = room.turn;
-  if(room.passTimer) clearTimeout(room.passTimer);
+function handleTranca(room) {
+  if (room.isRoundOver) return;
+  room.isRoundOver = true;
 
-  for(const s in room.players){
-    io.to(room.players[s].socketId).emit('gameStart',{
-      yourHand:room.players[s].hand,
-      startingSeat:room.turn,
+  const closer   = room.lastMoverSeat;
+  const nextCCW  = nextSeat(closer);
+  const closerP  = room.players[closer].handSum();
+  const nextP    = room.players[nextCCW].handSum();
+
+  const winnerSeat = closerP <= nextP ? closer : nextCCW;
+  const team       = teamOf(winnerSeat);
+  const points     = Object.values(room.players).reduce((s,p)=>s+p.handSum(),0);
+
+  room.scores[team] += points;
+  room.lastWinnerSeat = winnerSeat;
+  room.isFirstRound   = false;
+
+  io.in(room.id).emit('roundEnded',{
+    reason:'Tranca',
+    winner:winnerSeat,
+    winningTeam:team,
+    points,
+    scores:room.scores
+  });
+  broadcastHands(room);
+  setTimeout(()=>maybeStartNextRound(room),4000);
+}
+
+function handleRoundWin(room, winnerSeat, endsBefore) {
+  if (room.isRoundOver) return;
+  room.isRoundOver = true;
+
+  const team = teamOf(winnerSeat);
+
+  const capicua = endsBefore.left!==endsBefore.right &&
+                  room.leftEnd===room.rightEnd;
+
+  const paso = !Object.values(room.players).some(p =>
+    p.seat!==winnerSeat &&
+    p.hand.some(([x,y])=>
+      x===room.leftEnd||y===room.leftEnd||x===room.rightEnd||y===room.rightEnd)
+  );
+
+  let bonus = 0;
+  if (capicua && paso) bonus = 60;
+  else if (capicua || paso) bonus = 30;
+
+  const pipSum = Object.values(room.players).reduce((s,p)=>s+p.handSum(),0);
+  const points = pipSum + bonus;
+
+  room.scores[team] += points;
+  room.lastWinnerSeat = winnerSeat;
+  room.isFirstRound   = false;
+
+  io.in(room.id).emit('roundEnded',{
+    reason:'Closed',
+    winner:winnerSeat,
+    winningTeam:team,
+    capicua, paso,
+    points,
+    scores:room.scores
+  });
+  broadcastHands(room);
+  setTimeout(()=>maybeStartNextRound(room),4000);
+}
+
+function maybeStartNextRound(room) {
+  if (room.scores.some(s=>s>=200)){
+    const winningTeam = room.scores.findIndex(s=>s>=200);
+    io.in(room.id).emit('gameOver',{ winningTeam, scores:room.scores });
+    delete rooms[room.id];
+    return;
+  }
+  initNewRound(room);
+}
+
+function initNewRound(room) {
+  Object.assign(room,{
+    board:[], leftEnd:null, rightEnd:null,
+    pipCounts:{0:0,1:0,2:0,3:0,4:0,5:0,6:0},
+    turn:null, turnStarter:null,
+    lastMoverSeat:null,
+    passCount:0, isRoundOver:false
+  });
+
+  dealHands(room);
+
+  let opener;
+  if (room.isFirstRound) {
+    opener = +Object.keys(room.players).find(s =>
+      room.players[s].hand.some(([a,b])=>a===6&&b===6)
+    );
+    if (opener===undefined) opener=0;
+  } else opener = room.lastWinnerSeat;
+
+  room.turn = opener;
+  room.turnStarter = opener;
+
+  Object.values(room.players).forEach(p=>{
+    io.to(p.socketId).emit('roundStart',{
+      yourHand:p.hand,
+      startingSeat:opener,
       scores:room.scores
     });
-  }
-  io.in(roomId).emit('turnChanged',room.turn);
-  startTurnTimer(roomId,room);
+  });
+  io.in(room.id).emit('turnChanged',opener);
+  startTurnTimer(room);
 }
 
-function endOrReset(roomId,room,winningTeam){
-  if(room.scores[winningTeam]>=200){
-    io.in(roomId).emit('gameOver',{winningTeam,scores:room.scores});
-    delete rooms[roomId];
-  }else{
-    resetRound(roomId,room);
-  }
-}
-
-/* ---------- Socket.IO ---------- */
+/* -------------------------------------------------------------------------- */
+/*  Socket.IO main handler                                                    */
+/* -------------------------------------------------------------------------- */
 io.on('connection', socket=>{
 
-  socket.on('findRoom',({playerName})=>{
-    let roomId=Object.keys(rooms).find(id=>Object.keys(rooms[id].players).length<4);
-    if(!roomId){ roomId=`room${roomCounter++}`; createRoom(roomId); }
-    const room=rooms[roomId]; socket.join(roomId);
+  /* ---------- Room join / reconnect ---------- */
+  socket.on('findRoom', ({ playerName, roomId, reconnectSeat }) => {
 
-    const seat=[0,1,2,3].find(s=>!room.players[s]);
-    room.players[seat]={socketId:socket.id,hand:[],name:playerName||`P${seat}`};
+    /* --- Reconnect path --- */
+    if (roomId && rooms[roomId] && reconnectSeat!==undefined) {
+      const room = rooms[roomId];
+      const pl   = room.players[reconnectSeat];
+      if (pl && !pl.isConnected){
+        clearTimeout(room.reconnectTimers[reconnectSeat]);
+        pl.isConnected = true;
+        pl.socketId    = socket.id;
+        socket.join(roomId);
 
-    socket.emit('roomAssigned',{room:roomId});
-    socket.emit('roomJoined',{seat});
-    io.in(roomId).emit('lobbyUpdate',{
-      players:Object.entries(room.players).map(([s,p])=>({seat:+s,name:p.name})),
-      seatsRemaining:4-Object.keys(room.players).length
+        io.in(roomId).emit('playerReconnected',{ seat:pl.seat, name:pl.name });
+
+        socket.emit('reconnectSuccess',{
+          roomState:{
+            players: Object.values(room.players)
+              .map(p=>({ seat:p.seat,name:p.name,isConnected:p.isConnected })),
+            board    : room.board,
+            leftEnd  : room.leftEnd,
+            rightEnd : room.rightEnd,
+            pipCounts: room.pipCounts,
+            scores   : room.scores,
+            turn     : room.turn,
+            yourHand : pl.hand
+          }
+        });
+        return;
+      }
+    }
+
+    /* --- New join path --- */
+    let room = Object.values(rooms).find(r => !r.started && Object.keys(r.players).length<4);
+    if (!room) room = createRoom(`room${roomCounter++}`);
+
+    const seat = [0,1,2,3].find(s=>!room.players[s]);
+    const pl = new Player(socket.id, playerName||`Player ${seat+1}`, seat);
+    room.players[seat] = pl;
+
+    socket.join(room.id);
+    socket.emit('roomJoined',{ roomId:room.id, seat });
+    io.in(room.id).emit('lobbyUpdate',{
+      players:Object.values(room.players).map(p=>({ seat:p.seat, name:p.name }))
     });
 
-    if(Object.keys(room.players).length===4){
-      room.started=true; dealHands(room);
-      const starter = room.isFirst
-        ? +Object.keys(room.players).find(s=>room.players[s].hand.some(t=>t[0]===6&&t[1]===6))
-        : room.lastWinner;
-      room.turn         = starter;
-      room.turnStartSeat= starter;
-
-      for(const s in room.players){
-        io.to(room.players[s].socketId).emit('gameStart',{
-          yourHand:room.players[s].hand,
-          startingSeat:starter,
-          scores:room.scores
-        });
-      }
-      io.in(roomId).emit('turnChanged',starter);
-      startTurnTimer(roomId,room);
+    if (Object.keys(room.players).length===4){
+      room.started = true;
+      io.in(room.id).emit('allPlayersReady');
+      setTimeout(()=>initNewRound(room),1500);
     }
   });
 
-  socket.on('playTile',({roomId,seat,tile,side})=>{
-    const room=rooms[roomId]; if(!room||!room.started) return;
-    if(room.turn!==seat){ socket.emit('errorMessage','Not your turn'); return; }
-    if(room.passTimer) clearTimeout(room.passTimer);
+  /* ---------- Play tile ---------- */
+  socket.on('playTile', ({ roomId, seat, tile, side }) => {
+    const room = rooms[roomId];
+    if (!room || room.isRoundOver || room.turn!==seat) return;
 
-    const endsBefore=[room.leftEnd,room.rightEnd];
+    const player = room.players[seat];
+    const idx = player.hand.findIndex(([a,b]) =>
+      (a===tile[0] && b===tile[1]) || (a===tile[1] && b===tile[0])
+    );
+    if (idx===-1){ io.to(socket.id).emit('errorMessage','Tile not in hand'); return; }
 
-    if(room.board.length===0){
-      if(room.isFirst && !(tile[0]===6&&tile[1]===6)){
-        socket.emit('errorMessage','First move must be [6|6]'); return;
+    const endsBefore = { left:room.leftEnd, right:room.rightEnd };
+
+    if (room.board.length===0){
+      if (room.isFirstRound && !(tile[0]===6&&tile[1]===6)){
+        io.to(socket.id).emit('errorMessage','First move must be [6|6]');
+        return;
       }
-      room.board.push(tile); room.leftEnd=tile[0]; room.rightEnd=tile[1];
-    }else if(!placeTile(room,tile,side)){
-      socket.emit('errorMessage','Tile does not fit'); return;
+      room.board.push(tile);
+      [room.leftEnd, room.rightEnd] = tile;
+    } else {
+      if (!placeTile(room,tile,side)){
+        io.to(socket.id).emit('errorMessage','Tile does not fit');
+        return;
+      }
     }
 
+    /* Update pip counts */
     room.pipCounts[tile[0]]++;
     room.pipCounts[tile[1]]++;
-    room.lastPlayer=seat;
-    room.passes=0;
 
-    const player=room.players[seat];
-    player.hand = player.hand.filter(([x,y])=>
-      !((x===tile[0]&&y===tile[1]) || (x===tile[1]&&y===tile[0]))
-    );
+    /* Remove tile & sync */
+    player.hand.splice(idx,1);
+    io.to(player.socketId).emit('updateHand', player.hand);
 
-    io.in(roomId).emit('broadcastMove',{
-      seat,tile,board:room.board,pipCounts:room.pipCounts
-    });
+    room.lastMoverSeat = seat;
 
-    /* Check win by empty hand */
-    if(player.hand.length===0){
-      const capicua = endsBefore[0]!==endsBefore[1] && room.leftEnd===room.rightEnd;
-      let paso=true;
-      for(const s in room.players){
-        if(+s===seat) continue;
-        if(room.players[s].hand.some(([x,y])=>
-          x===room.leftEnd||y===room.leftEnd||x===room.rightEnd||y===room.rightEnd)){
-          paso=false; break;
+    /* Right-hand block bonus */
+    if (room.board.length===1 && seat===room.turnStarter){
+      const rightSeat = nextSeat(seat);
+      if (teamOf(rightSeat)!==teamOf(seat)){
+        const oppHand = room.players[rightSeat].hand;
+        const blocked = !oppHand.some(([x,y])=>
+          x===room.leftEnd||y===room.leftEnd||x===room.rightEnd||y===room.rightEnd
+        );
+        if (blocked){
+          const bonus = (tile[0]===tile[1]) ? 30 : 60;
+          room.scores[teamOf(seat)] += bonus;
+          io.in(room.id).emit('bonusAwarded',{
+            seat, type:'Right-Hand Block', points:bonus, scores:room.scores
+          });
         }
       }
-
-      let points=Object.values(room.players).reduce((s,p)=>s+handSum(p.hand),0);
-      if(capicua&&paso) points+=60;
-      else if(capicua||paso) points+=30;
-
-      room.scores[seat%2]+=points;
-      room.lastWinner=seat;
-
-      io.in(roomId).emit('roundEnded',{
-        winner:seat,reason:'Closed',capicua,paso,points,
-        scores:room.scores,board:room.board
-      });
-      endOrReset(roomId,room,seat%2);
-      return;
     }
 
-    advanceTurn(roomId,room);
+    /* Broadcast move (pipCounts restored) */
+    io.in(room.id).emit('broadcastMove',{
+      seat, tile,
+      board:room.board,
+      leftEnd:room.leftEnd, rightEnd:room.rightEnd,
+      pipCounts:room.pipCounts
+    });
+
+    /* Win by empty hand? */
+    if (player.hand.length===0) {
+      handleRoundWin(room, seat, endsBefore);
+    } else {
+      stepTurn(room);
+    }
   });
 
-  socket.on('passTurn',({roomId,seat})=>{
-    const room=rooms[roomId]; if(!room||!room.started) return;
-    if(room.turn!==seat){ socket.emit('errorMessage','Not your turn'); return; }
-    if(room.passTimer) clearTimeout(room.passTimer);
+  /* ---------- Manual pass ---------- */
+  socket.on('passTurn', ({ roomId, seat }) => {
+    const room = rooms[roomId];
+    if (!room || room.isRoundOver || room.turn!==seat) return;
 
-    room.passes++;
-    io.in(roomId).emit('playerPassed',seat);
+    room.passCount++;
+    io.in(room.id).emit('playerPassed',{ seat });
 
-    if(room.passes===4){ handleTranca(roomId,room); }
-    else advanceTurn(roomId,room);
+    if (room.passCount===4) handleTranca(room);
+    else stepTurn(room);
   });
 
-  socket.on('disconnect',()=>{
-    for(const rid in rooms){
-      const r=rooms[rid];
-      for(const s in r.players){
-        if(r.players[s].socketId===socket.id) delete r.players[s];
+  /* ---------- Disconnect handling ---------- */
+  socket.on('disconnect', () => {
+    for (const room of Object.values(rooms)){
+      const pl = Object.values(room.players).find(p=>p.socketId===socket.id);
+      if (!pl) continue;
+
+      pl.isConnected = false;
+      io.in(room.id).emit('playerDisconnected',{ seat:pl.seat, name:pl.name });
+
+      room.reconnectTimers[pl.seat] = setTimeout(()=>{
+        if (!pl.isConnected){
+          io.in(room.id).emit('gameOver',{
+            reason:`Player ${pl.name} did not reconnect.`,
+            winningTeam:(teamOf(pl.seat)+1)%2
+          });
+          delete rooms[room.id];
+        }
+      },60_000);
+
+      if (room.turn===pl.seat && !room.isRoundOver){
+        room.passCount++;
+        io.in(room.id).emit('playerPassed',{ seat:pl.seat, reason:'disconnected' });
+        room.passCount===4 ? handleTranca(room) : stepTurn(room);
       }
-      if(!Object.keys(r.players).length) delete rooms[rid];
+      break;
     }
   });
 });
 
-/* ---------- Start server ---------- */
-server.listen(PORT,()=>console.log(`Domino server running on port ${PORT}`));
+/* -------------------------------------------------------------------------- */
+/*  Start server                                                              */
+/* -------------------------------------------------------------------------- */
+server.listen(PORT,()=>console.log(`✅ Domino server running at http://localhost:${PORT}`));

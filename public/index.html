@@ -1,93 +1,196 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Dominican Domino</title>
-  <style>
-    body {
-      font-family: sans-serif;
-      padding: 1rem;
-      background: #f5f5f5;
-    }
-    /* Containers that show tiles */
-    #board, #hand,
-    #topPlayer, #leftPlayer, #rightPlayer {
-      display: flex;
-      gap: 4px;
-      flex-wrap: wrap;
-      margin: 0.5rem 0;
-    }
-    /* Domino tile styling */
-    .tile {
-      display: inline-block;
-      border: 2px solid #333;
-      background: white;
-      padding: 0.3rem 0.6rem;
-      font-weight: bold;
-      cursor: pointer;
-    }
-    .tile.disabled  { opacity: 0.3; cursor: default; }
-    .tile.your-turn { border-color: green; background: #eaffea; }
-  </style>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dominican Domino</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        /* --- General Setup & Theming --- */
+        :root {
+            --table-bg: #004d26; /* Classic green game table */
+            --panel-bg: #f5f5f5;
+            --tile-bg: #ffffff;
+            --text-dark: #333333;
+            --text-light: #ffffff;
+            --border-color: #cccccc;
+            --accent-color: #ffc107; /* Gold for highlights */
+            --error-color: #d9534f;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: var(--table-bg);
+            color: var(--text-dark);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 1rem;
+        }
+
+        /* --- Main Layout (CSS Grid) --- */
+        .game-container {
+            display: grid;
+            grid-template-columns: 250px 1fr; /* Sidebar and main game area */
+            grid-template-rows: 1fr;
+            gap: 1.5rem;
+            width: 100%;
+            max-width: 1400px;
+            height: 90vh;
+            max-height: 900px;
+        }
+
+        .info-panel {
+            background-color: var(--panel-bg);
+            border-radius: 8px;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            overflow-y: auto;
+        }
+
+        .game-table {
+            display: grid;
+            grid-template-columns: 150px 1fr 150px;
+            grid-template-rows: 100px 1fr 150px;
+            grid-template-areas:
+                "top-player top-player top-player"
+                "left-player board right-player"
+                "player-hand player-hand player-hand";
+            gap: 1rem;
+        }
+
+        /* --- Component Styling --- */
+        .info-section {
+            border-top: 1px solid var(--border-color);
+            padding-top: 1rem;
+        }
+        .info-section:first-child {
+            border-top: none;
+            padding-top: 0;
+        }
+        .info-section h3 {
+            margin-bottom: 0.5rem;
+            font-size: 1.1rem;
+        }
+
+        #status { font-weight: 600; font-size: 1.2rem; }
+        #errors { color: var(--error-color); font-weight: 600; min-height: 1.2em; }
+        #messages { max-height: 200px; overflow-y: auto; font-size: 0.9rem; }
+        #messages > div { padding: 2px 0; border-bottom: 1px solid #eee; }
+
+        /* --- Player Areas --- */
+        .player-area { padding: 0.5rem; text-align: center; }
+        #topPlayer    { grid-area: top-player; }
+        #leftPlayer   { grid-area: left-player; align-self: center; }
+        #rightPlayer  { grid-area: right-player; align-self: center; }
+        #hand         { grid-area: player-hand; }
+
+        /* Center the board within its grid area */
+        #board {
+            grid-area: board;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            align-content: center;
+            justify-content: center;
+            background: rgba(0,0,0,0.1);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+
+        /* --- Tile Styling --- */
+        .tile {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #999;
+            background: var(--tile-bg);
+            padding: 0.4rem 0.8rem;
+            font-weight: 600;
+            font-size: 1.2rem;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+            transition: all 0.2s ease-in-out;
+            cursor: pointer;
+        }
+
+        .tile.disabled {
+            opacity: 0.6;
+            cursor: default;
+            box-shadow: none;
+        }
+
+        .tile.your-turn {
+            border-color: var(--accent-color);
+            box-shadow: 0 0 15px var(--accent-color);
+            transform: translateY(-5px);
+        }
+        .tile.your-turn:hover {
+            background-color: #fffde7;
+        }
+
+    </style>
 </head>
 <body>
-  <h1>Dominican Domino</h1>
 
-  <!-- Player info & status -->
-  <p id="playerInfo"></p>
-  <p id="status">Connecting…</p>
-  <div id="errors" style="color:red;font-weight:bold;"></div>
+    <div class="game-container">
+        <div class="info-panel">
+            <div class="info-section">
+                <h1>Dominican Domino</h1>
+                <p id="playerInfo">Connecting...</p>
+                <div id="errors"></div>
+            </div>
 
-  <!-- Lobby -->
-  <div><strong>Lobby:</strong>
-    <ul id="lobbyList"></ul>
-  </div>
+            <div class="info-section">
+                <h3>Status</h3>
+                <p id="status">Waiting for players...</p>
+            </div>
 
-  <!-- Top opponent -->
-  <div><strong>Top Opponent</strong>
-    <div id="topPlayer"></div>
-  </div>
+            <div class="info-section">
+                <h3>Scores</h3>
+                <p id="scores">Team 0&2: 0 — Team 1&3: 0</p>
+            </div>
 
-  <!-- Main play area -->
-  <div style="display:flex;justify-content:center;align-items:flex-start;gap:2rem">
-    <div><strong>Left Opponent</strong>
-      <div id="leftPlayer"></div>
+            <div class="info-section">
+                <h3>Pip Counts</h3>
+                <p id="pipCounts">-</p>
+            </div>
+            
+            <div class="info-section" style="display:none;" id="lobbyContainer">
+                <h3>Lobby</h3>
+                <ul id="lobbyList"></ul>
+            </div>
+
+            <div class="info-section">
+                <h3>Game Events</h3>
+                <div id="messages"></div>
+            </div>
+        </div>
+
+        <div class="game-table">
+            <div id="topPlayer" class="player-area"></div>
+            <div id="leftPlayer" class="player-area"></div>
+            <div id="board">
+                </div>
+            <div id="rightPlayer" class="player-area"></div>
+            <div id="hand" class="player-area">
+                </div>
+        </div>
     </div>
 
-    <div>
-      <strong>Board</strong>
-      <div id="board"></div>
-    </div>
-
-    <div><strong>Right Opponent</strong>
-      <div id="rightPlayer"></div>
-    </div>
-  </div>
-
-  <!-- Your hand -->
-  <div><strong>Your Hand</strong>
-    <div id="hand"></div>
-  </div>
-
-  <!-- Scores -->
-  <div><strong>Scores (0&2 vs 1&3):</strong>
-    <span id="scores"></span>
-  </div>
-
-  <!-- Game events -->
-  <div><strong>Game Events:</strong>
-    <div id="messages"></div>
-  </div>
-
-  <!-- Optional pip counts -->
-  <div><strong>Pip Counts:</strong>
-    <div id="pipCounts"></div>
-  </div>
-
-  <!-- Pass button (revealed only when server says to) -->
-  <button id="passBtn" onclick="passTurn()" style="display:none;">Pass Turn</button>
-
-  <script src="/socket.io/socket.io.js"></script>
-  <script src="client.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="client.js"></script>
 </body>
 </html>
