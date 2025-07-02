@@ -1,5 +1,5 @@
 /* =========================================================================
-   client.js — (Correct Lobby Display Logic)
+   client.js — (Final, Fully Synced Version)
    ========================================================================= */
 
 // ── Socket + basic state ────────────────────────────────────────────────
@@ -19,7 +19,7 @@ const statusEl         = document.getElementById('status');
 const boardEl          = document.getElementById('board');
 const handEl           = document.getElementById('hand');
 const lobbyListEl      = document.getElementById('lobbyList');
-const lobbyContainerEl = document.getElementById('lobbyContainer'); // <-- ADDED
+const lobbyContainerEl = document.getElementById('lobbyContainer');
 const scoresEl         = document.getElementById('scores');
 const playerInfoEl     = document.getElementById('playerInfo');
 const errorsEl         = document.getElementById('errors');
@@ -124,15 +124,16 @@ socket.on('roomJoined', ({ seat }) => {
 });
 
 socket.on('lobbyUpdate', ({ players, seatsRemaining }) => {
-  lobbyContainerEl.style.display = 'block'; // <-- CHANGED
+  lobbyContainerEl.style.display = 'block';
   seatMap = Object.fromEntries(players.map(p => [p.seat, p]));
   renderLobby(players);
   renderOpponents();
   setStatus(`Waiting for players (${seatsRemaining} seat${seatsRemaining !== 1 ? 's' : ''} left)`);
 });
 
-socket.on('gameStart', ({ yourHand, startingSeat, scores: s }) => {
-  lobbyContainerEl.style.display = 'none'; // <-- CHANGED
+// THIS IS THE CORRECTED LINE
+socket.on('roundStart', ({ yourHand, startingSeat, scores: s }) => {
+  lobbyContainerEl.style.display = 'none';
   myHand = yourHand;
   boardState = [];
   scores = s;
@@ -145,7 +146,6 @@ socket.on('gameStart', ({ yourHand, startingSeat, scores: s }) => {
 });
 
 socket.on('updateHand', hand => {
-  // server tells us our new hand after we play
   myHand = hand;
   renderHand();
 });
