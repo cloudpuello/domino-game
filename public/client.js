@@ -103,13 +103,33 @@ function renderPips(pipCounts) {
 }
 
 /* ── Moves ────────────────────────────────────────────────────────────── */
+
+// THIS FUNCTION IS NOW FIXED AND MORE ROBUST
 function playTile(idx) {
-  if (currentTurn !== mySeat) return;
-  const tile = myHand[idx];
-  let side = prompt('Side? left / right (blank = auto)');
-  if (side !== 'left' && side !== 'right') side = null;
-  socket.emit('playTile', { roomId, seat: mySeat, tile, side });
+    if (currentTurn !== mySeat) return;
+
+    const tile = myHand[idx];
+    const userInput = prompt('Side? left / right (blank = auto)');
+
+    // 1. If the user clicks "Cancel", do nothing.
+    if (userInput === null) {
+        return;
+    }
+
+    // 2. Clean up the input to be more flexible.
+    const cleanInput = userInput.trim().toLowerCase();
+    
+    let side;
+    if (cleanInput === 'left' || cleanInput === 'right') {
+        side = cleanInput;
+    } else {
+        // 3. Any other input (including blank) counts as "auto".
+        side = null;
+    }
+
+    socket.emit('playTile', { roomId, seat: mySeat, tile, side });
 }
+
 
 /* ── Socket events ────────────────────────────────────────────────────── */
 socket.on('roomAssigned', ({ room }) => {
@@ -131,7 +151,6 @@ socket.on('lobbyUpdate', ({ players, seatsRemaining }) => {
   setStatus(`Waiting for players (${seatsRemaining} seat${seatsRemaining !== 1 ? 's' : ''} left)`);
 });
 
-// THIS IS THE CORRECTED LINE
 socket.on('roundStart', ({ yourHand, startingSeat, scores: s }) => {
   lobbyContainerEl.style.display = 'none';
   myHand = yourHand;
