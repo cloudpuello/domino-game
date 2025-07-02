@@ -1,32 +1,33 @@
 /* =========================================================================
-   client.js — Dominican Domino (sync with auto-pass server)
+   client.js — (Correct Lobby Display Logic)
    ========================================================================= */
 
 // ── Socket + basic state ────────────────────────────────────────────────
 const socket = io();
 const playerName = prompt('Enter your name:') || 'Anonymous';
 
-let roomId      = null;
-let mySeat      = null;          // 0-3
-let currentTurn = null;          // whose turn
-let myHand      = [];
-let boardState  = [];
-let scores      = [0, 0];        // [team 0&2, team 1&3]
-let seatMap     = {};            // seat → { name }
+let roomId        = null;
+let mySeat        = null;        // 0-3
+let currentTurn   = null;        // whose turn
+let myHand        = [];
+let boardState    = [];
+let scores        = [0, 0];      // [team 0&2, team 1&3]
+let seatMap       = {};          // seat → { name }
 
 // ── DOM handles ─────────────────────────────────────────────────────────
-const statusEl     = document.getElementById('status');
-const boardEl      = document.getElementById('board');
-const handEl       = document.getElementById('hand');
-const lobbyListEl  = document.getElementById('lobbyList');
-const scoresEl     = document.getElementById('scores');
-const playerInfoEl = document.getElementById('playerInfo');
-const errorsEl     = document.getElementById('errors');
-const msgEl        = document.getElementById('messages');
-const pipEl        = document.getElementById('pipCounts');
-const topEl        = document.getElementById('topPlayer');
-const leftEl       = document.getElementById('leftPlayer');
-const rightEl      = document.getElementById('rightPlayer');
+const statusEl         = document.getElementById('status');
+const boardEl          = document.getElementById('board');
+const handEl           = document.getElementById('hand');
+const lobbyListEl      = document.getElementById('lobbyList');
+const lobbyContainerEl = document.getElementById('lobbyContainer'); // <-- ADDED
+const scoresEl         = document.getElementById('scores');
+const playerInfoEl     = document.getElementById('playerInfo');
+const errorsEl         = document.getElementById('errors');
+const msgEl            = document.getElementById('messages');
+const pipEl            = document.getElementById('pipCounts');
+const topEl            = document.getElementById('topPlayer');
+const leftEl           = document.getElementById('leftPlayer');
+const rightEl          = document.getElementById('rightPlayer');
 
 // ask server for a room
 socket.emit('findRoom', { playerName });
@@ -123,6 +124,7 @@ socket.on('roomJoined', ({ seat }) => {
 });
 
 socket.on('lobbyUpdate', ({ players, seatsRemaining }) => {
+  lobbyContainerEl.style.display = 'block'; // <-- CHANGED
   seatMap = Object.fromEntries(players.map(p => [p.seat, p]));
   renderLobby(players);
   renderOpponents();
@@ -130,6 +132,7 @@ socket.on('lobbyUpdate', ({ players, seatsRemaining }) => {
 });
 
 socket.on('gameStart', ({ yourHand, startingSeat, scores: s }) => {
+  lobbyContainerEl.style.display = 'none'; // <-- CHANGED
   myHand = yourHand;
   boardState = [];
   scores = s;

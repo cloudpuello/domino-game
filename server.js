@@ -1,6 +1,6 @@
 /* ============================================================================
- *  server.js — Dominican Domino (Full Rules + pipCounts restored)
- *  ========================================================================= */
+ * server.js — (Final, Fully Patched Version)
+ * ========================================================================= */
 
 const express = require('express');
 const http    = require('http');
@@ -14,14 +14,14 @@ const PORT   = 3000;
 app.use(express.static('public'));
 
 /* -------------------------------------------------------------------------- */
-/*  Helpers & constants                                                       */
+/* Helpers & constants                                                       */
 /* -------------------------------------------------------------------------- */
 const turnOrder = [0, 3, 2, 1];
 const nextSeat  = seat => turnOrder[(turnOrder.indexOf(seat) + 1) % 4];
 const teamOf    = seat => seat % 2;
 
 /* -------------------------------------------------------------------------- */
-/*  Player class                                                              */
+/* Player class                                                              */
 /* -------------------------------------------------------------------------- */
 class Player {
   constructor(socketId, name, seat) {
@@ -35,7 +35,7 @@ class Player {
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Room factory                                                              */
+/* Room factory                                                              */
 /* -------------------------------------------------------------------------- */
 let roomCounter = 1;
 const rooms     = {};
@@ -43,33 +43,33 @@ const rooms     = {};
 function createRoom(id) {
   rooms[id] = {
     id,
-    players       : {},
-    started       : false,
+    players        : {},
+    isGameStarted  : false, // <-- RENAMED for clarity
 
     /* round-state */
-    board         : [],
-    leftEnd       : null,
-    rightEnd      : null,
-    pipCounts     : {0:0,1:0,2:0,3:0,4:0,5:0,6:0},
-    turn          : null,
-    turnStarter   : null,
-    lastMoverSeat : null,
-    passCount     : 0,
-    isRoundOver   : false,
+    board          : [],
+    leftEnd        : null,
+    rightEnd       : null,
+    pipCounts      : {0:0,1:0,2:0,3:0,4:0,5:0,6:0},
+    turn           : null,
+    turnStarter    : null,
+    lastMoverSeat  : null,
+    passCount      : 0,
+    isRoundOver    : false,
 
     /* meta */
-    isFirstRound  : true,
-    lastWinnerSeat: null,
-    scores        : [0,0],
+    isFirstRound   : true,
+    lastWinnerSeat : null,
+    scores         : [0,0],
 
-    passTimer     : null,
+    passTimer      : null,
     reconnectTimers: {},   // seat ➜ timerId
   };
   return rooms[id];
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Domino helpers                                                            */
+/* Domino helpers                                                            */
 /* -------------------------------------------------------------------------- */
 function newDeck() {
   const deck = [];
@@ -110,7 +110,7 @@ function placeTile(room, tile, sideHint) {
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Timers                                                                    */
+/* Timers                                                                    */
 /* -------------------------------------------------------------------------- */
 const TURN_MS = 90_000;
 function startTurnTimer(room) {
@@ -123,7 +123,7 @@ function startTurnTimer(room) {
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Turn advancement (single, event-driven step)                              */
+/* Turn advancement (single, event-driven step)                              */
 /* -------------------------------------------------------------------------- */
 function stepTurn(room) {
   if (room.passTimer) clearTimeout(room.passTimer);
@@ -131,7 +131,6 @@ function stepTurn(room) {
   room.turn = nextSeat(room.turn);
   const player = room.players[room.turn];
 
-  /* Auto-pass if seat disconnected */
   if (!player.isConnected) {
     room.passCount++;
     io.in(room.id).emit('playerPassed', { seat: room.turn, reason:'disconnected' });
@@ -154,7 +153,7 @@ function stepTurn(room) {
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Round / scoring helpers                                                   */
+/* Round / scoring helpers                                                   */
 /* -------------------------------------------------------------------------- */
 function broadcastHands(room) {
   const hands = Object.values(room.players).map(p => ({ seat:p.seat, hand:p.hand }));
@@ -271,14 +270,12 @@ function initNewRound(room) {
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Socket.IO main handler                                                    */
+/* Socket.IO main handler                                                    */
 /* -------------------------------------------------------------------------- */
 io.on('connection', socket=>{
 
-  /* ---------- Room join / reconnect ---------- */
   socket.on('findRoom', ({ playerName, roomId, reconnectSeat }) => {
 
-    /* --- Reconnect path --- */
     if (roomId && rooms[roomId] && reconnectSeat!==undefined) {
       const room = rooms[roomId];
       const pl   = room.players[reconnectSeat];
@@ -307,8 +304,9 @@ io.on('connection', socket=>{
       }
     }
 
-    /* --- New join path --- */
-    let room = Object.values(rooms).find(r => !r.started && Object.keys(r.players).length<4);
+    // --- New join path ---
+    // UPDATED to use the isGameStarted flag for more reliable matchmaking
+    let room = Object.values(rooms).find(r => !r.isGameStarted && Object.keys(r.players).length < 4);
     if (!room) room = createRoom(`room${roomCounter++}`);
 
     const seat = [0,1,2,3].find(s=>!room.players[s]);
@@ -318,17 +316,17 @@ io.on('connection', socket=>{
     socket.join(room.id);
     socket.emit('roomJoined',{ roomId:room.id, seat });
     io.in(room.id).emit('lobbyUpdate',{
-      players:Object.values(room.players).map(p=>({ seat:p.seat, name:p.name }))
+      players:Object.values(room.players).map(p=>({ seat:p.seat, name:p.name })),
+      seatsRemaining: 4 - Object.keys(room.players).length,
     });
 
     if (Object.keys(room.players).length===4){
-      room.started = true;
+      room.isGameStarted = true; // UPDATED to use the consistent flag
       io.in(room.id).emit('allPlayersReady');
       setTimeout(()=>initNewRound(room),1500);
     }
   });
 
-  /* ---------- Play tile ---------- */
   socket.on('playTile', ({ roomId, seat, tile, side }) => {
     const room = rooms[roomId];
     if (!room || room.isRoundOver || room.turn!==seat) return;
@@ -355,17 +353,14 @@ io.on('connection', socket=>{
       }
     }
 
-    /* Update pip counts */
     room.pipCounts[tile[0]]++;
     room.pipCounts[tile[1]]++;
 
-    /* Remove tile & sync */
     player.hand.splice(idx,1);
     io.to(player.socketId).emit('updateHand', player.hand);
 
     room.lastMoverSeat = seat;
 
-    /* Right-hand block bonus */
     if (room.board.length===1 && seat===room.turnStarter){
       const rightSeat = nextSeat(seat);
       if (teamOf(rightSeat)!==teamOf(seat)){
@@ -383,7 +378,6 @@ io.on('connection', socket=>{
       }
     }
 
-    /* Broadcast move (pipCounts restored) */
     io.in(room.id).emit('broadcastMove',{
       seat, tile,
       board:room.board,
@@ -391,7 +385,6 @@ io.on('connection', socket=>{
       pipCounts:room.pipCounts
     });
 
-    /* Win by empty hand? */
     if (player.hand.length===0) {
       handleRoundWin(room, seat, endsBefore);
     } else {
@@ -399,48 +392,48 @@ io.on('connection', socket=>{
     }
   });
 
-  /* ---------- Manual pass ---------- */
-  socket.on('passTurn', ({ roomId, seat }) => {
-    const room = rooms[roomId];
-    if (!room || room.isRoundOver || room.turn!==seat) return;
-
-    room.passCount++;
-    io.in(room.id).emit('playerPassed',{ seat });
-
-    if (room.passCount===4) handleTranca(room);
-    else stepTurn(room);
-  });
-
-  /* ---------- Disconnect handling ---------- */
+  /* ---------- Disconnect handling (FULLY REWRITTEN) ---------- */
   socket.on('disconnect', () => {
-    for (const room of Object.values(rooms)){
-      const pl = Object.values(room.players).find(p=>p.socketId===socket.id);
-      if (!pl) continue;
+    for (const room of Object.values(rooms)) {
+        const player = Object.values(room.players).find(p => p.socketId === socket.id);
 
-      pl.isConnected = false;
-      io.in(room.id).emit('playerDisconnected',{ seat:pl.seat, name:pl.name });
+        if (!player) continue;
 
-      room.reconnectTimers[pl.seat] = setTimeout(()=>{
-        if (!pl.isConnected){
-          io.in(room.id).emit('gameOver',{
-            reason:`Player ${pl.name} did not reconnect.`,
-            winningTeam:(teamOf(pl.seat)+1)%2
-          });
-          delete rooms[room.id];
+        // Check if the game hasn't started yet (player is in lobby)
+        if (!room.isGameStarted) {
+            delete room.players[player.seat];
+            // Notify remaining players in the lobby that a spot opened up.
+            io.in(room.id).emit('lobbyUpdate', {
+                players: Object.values(room.players).map(p => ({ seat: p.seat, name: p.name })),
+                seatsRemaining: 4 - Object.keys(room.players).length
+            });
+        } else {
+            // Player left a game in progress.
+            player.isConnected = false;
+            io.in(room.id).emit('playerDisconnected', { seat: player.seat, name: player.name });
+
+            // Start the 60-second reconnect timer.
+            room.reconnectTimers[player.seat] = setTimeout(() => {
+                if (!player.isConnected) {
+                    io.in(room.id).emit('gameOver', {
+                        reason: `Player ${player.name} did not reconnect.`,
+                        winningTeam: (teamOf(player.seat) + 1) % 2
+                    });
+                    delete rooms[room.id];
+                }
+            }, 60000);
+
+            // If it was the disconnected player's turn, advance play.
+            if (room.turn === player.seat && !room.isRoundOver) {
+                stepTurn(room);
+            }
         }
-      },60_000);
-
-      if (room.turn===pl.seat && !room.isRoundOver){
-        room.passCount++;
-        io.in(room.id).emit('playerPassed',{ seat:pl.seat, reason:'disconnected' });
-        room.passCount===4 ? handleTranca(room) : stepTurn(room);
-      }
-      break;
+        break;
     }
   });
 });
 
 /* -------------------------------------------------------------------------- */
-/*  Start server                                                              */
+/* Start server                                                              */
 /* -------------------------------------------------------------------------- */
 server.listen(PORT,()=>console.log(`✅ Domino server running at http://localhost:${PORT}`));
