@@ -1,5 +1,5 @@
 /* ============================================================================
- * server.js — (Final, Fully Patched Version)
+ * server.js — (Clockwise Turn Order)
  * ========================================================================= */
 
 const express = require('express');
@@ -16,7 +16,7 @@ app.use(express.static('public'));
 /* -------------------------------------------------------------------------- */
 /* Helpers & constants                                                       */
 /* -------------------------------------------------------------------------- */
-const turnOrder = [0, 3, 2, 1];
+const turnOrder = [0, 1, 2, 3]; // <-- THIS LINE IS UPDATED
 const nextSeat  = seat => turnOrder[(turnOrder.indexOf(seat) + 1) % 4];
 const teamOf    = seat => seat % 2;
 
@@ -63,7 +63,7 @@ function createRoom(id) {
     scores         : [0,0],
 
     passTimer      : null,
-    reconnectTimers: {},   // seat ➜ timerId
+    reconnectTimers: {},
   };
   return rooms[id];
 }
@@ -137,7 +137,6 @@ function stepTurn(room) {
     return room.passCount===4 ? handleTranca(room) : setImmediate(()=>stepTurn(room));
   }
 
-  // THIS IS THE CORRECTED LINE
   const canPlay = room.board.length === 0 || player.hand.some(([x, y]) =>
       x === room.leftEnd || y === room.leftEnd || x === room.rightEnd || y === room.rightEnd);
 
@@ -166,22 +165,22 @@ function handleTranca(room) {
   room.isRoundOver = true;
 
   const closer   = room.lastMoverSeat;
-  const nextCCW  = nextSeat(closer);
-  const closerP  = room.players[closer].handSum();
-  const nextP    = room.players[nextCCW].handSum();
+  const nextPlayerInTurn = nextSeat(closer);
+  const closerPips = room.players[closer].handSum();
+  const nextPlayerPips = room.players[nextPlayerInTurn].handSum();
 
-  const winnerSeat = closerP <= nextP ? closer : nextCCW;
-  const team       = teamOf(winnerSeat);
-  const points     = Object.values(room.players).reduce((s,p)=>s+p.handSum(),0);
+  const winnerSeat = closerPips <= nextPlayerPips ? closer : nextPlayerInTurn;
+  const winningTeam = teamOf(winnerSeat);
+  const points = Object.values(room.players).reduce((s,p)=>s+p.handSum(),0);
 
-  room.scores[team] += points;
+  room.scores[winningTeam] += points;
   room.lastWinnerSeat = winnerSeat;
   room.isFirstRound   = false;
 
   io.in(room.id).emit('roundEnded',{
     reason:'Tranca',
     winner:winnerSeat,
-    winningTeam:team,
+    winningTeam,
     points,
     scores:room.scores
   });
@@ -195,13 +194,11 @@ function handleRoundWin(room, winnerSeat, endsBefore) {
 
   const team = teamOf(winnerSeat);
 
-  const capicua = endsBefore.left!==endsBefore.right &&
-                  room.leftEnd===room.rightEnd;
+  const capicua = endsBefore.left!==endsBefore.right && room.leftEnd===room.rightEnd;
 
   const paso = !Object.values(room.players).some(p =>
     p.seat!==winnerSeat &&
-    p.hand.some(([x,y])=>
-      x===room.leftEnd||y===room.leftEnd||x===room.rightEnd||y===room.rightEnd)
+    p.hand.some(([x,y])=> x===room.leftEnd||y===room.leftEnd||x===room.rightEnd||y===room.rightEnd)
   );
 
   let bonus = 0;
@@ -290,15 +287,14 @@ io.on('connection', socket=>{
 
         socket.emit('reconnectSuccess',{
           roomState:{
-            players: Object.values(room.players)
-              .map(p=>({ seat:p.seat,name:p.name,isConnected:p.isConnected })),
-            board    : room.board,
-            leftEnd  : room.leftEnd,
-            rightEnd : room.rightEnd,
+            players: Object.values(room.players).map(p=>({ seat:p.seat,name:p.name,isConnected:p.isConnected })),
+            board: room.board,
+            leftEnd: room.leftEnd,
+            rightEnd: room.rightEnd,
             pipCounts: room.pipCounts,
-            scores   : room.scores,
-            turn     : room.turn,
-            yourHand : pl.hand
+            scores: room.scores,
+            turn: room.turn,
+            yourHand: pl.hand
           }
         });
         return;
@@ -331,9 +327,7 @@ io.on('connection', socket=>{
     if (!room || room.isRoundOver || room.turn!==seat) return;
 
     const player = room.players[seat];
-    const idx = player.hand.findIndex(([a,b]) =>
-      (a===tile[0] && b===tile[1]) || (a===tile[1] && b===tile[0])
-    );
+    const idx = player.hand.findIndex(([a,b]) => (a===tile[0] && b===tile[1]) || (a===tile[1] && b===tile[0]));
     if (idx===-1){ io.to(socket.id).emit('errorMessage','Tile not in hand'); return; }
 
     const endsBefore = { left:room.leftEnd, right:room.rightEnd };
@@ -364,15 +358,11 @@ io.on('connection', socket=>{
       const rightSeat = nextSeat(seat);
       if (teamOf(rightSeat)!==teamOf(seat)){
         const oppHand = room.players[rightSeat].hand;
-        const blocked = !oppHand.some(([x,y])=>
-          x===room.leftEnd||y===room.leftEnd||x===room.rightEnd||y===room.rightEnd
-        );
+        const blocked = !oppHand.some(([x,y])=> x===room.leftEnd||y===room.leftEnd||x===room.rightEnd||y===room.rightEnd);
         if (blocked){
           const bonus = (tile[0]===tile[1]) ? 30 : 60;
           room.scores[teamOf(seat)] += bonus;
-          io.in(room.id).emit('bonusAwarded',{
-            seat, type:'Right-Hand Block', points:bonus, scores:room.scores
-          });
+          io.in(room.id).emit('bonusAwarded',{ seat, type:'Right-Hand Block', points:bonus, scores:room.scores });
         }
       }
     }
