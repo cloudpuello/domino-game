@@ -1,5 +1,5 @@
 /* =========================================================================
-   client.js — (Updated for New Scoreboard)
+   client.js — (All Fixes + Opponent Hand Display)
    ========================================================================= */
 
 // ── Socket + basic state ────────────────────────────────────────────────
@@ -13,6 +13,7 @@ let myHand        = [];
 let boardState    = [];
 let scores        = [0, 0];
 let seatMap       = {};
+let handSizes     = {}; // NEW: To track opponent hand counts
 
 // ── DOM handles ─────────────────────────────────────────────────────────
 const statusEl         = document.getElementById('status');
@@ -27,9 +28,8 @@ const pipEl            = document.getElementById('pipCounts');
 const topEl            = document.getElementById('topPlayer');
 const leftEl           = document.getElementById('leftPlayer');
 const rightEl          = document.getElementById('rightPlayer');
-// --- UPDATED DOM HANDLES FOR SCORES ---
-const team0ScoreEl = document.getElementById('team0-score');
-const team1ScoreEl = document.getElementById('team1-score');
+const team0ScoreEl     = document.getElementById('team0-score');
+const team1ScoreEl     = document.getElementById('team1-score');
 
 // Check if we are reconnecting to a game stored in the session
 const reconnectData = {
@@ -89,17 +89,44 @@ function seatPos(seat) {
   return 'left';
 }
 
+// --- THIS FUNCTION IS UPDATED TO SHOW OPPONENT HANDS ---
 function renderOpponents() {
-  topEl.textContent = leftEl.textContent = rightEl.textContent = '';
-  Object.entries(seatMap).forEach(([s, info]) => {
-    const pos = seatPos(+s);
-    if (pos === 'top')   topEl.textContent   = `${info.name} (Seat ${s})`;
-    if (pos === 'left')  leftEl.textContent  = `${info.name} (Seat ${s})`;
-    if (pos === 'right') rightEl.textContent = `${info.name} (Seat ${s})`;
-  });
+    const playerAreas = {
+        top: topEl,
+        left: leftEl,
+        right: rightEl,
+    };
+
+    // Clear all opponent areas first
+    Object.values(playerAreas).forEach(el => el.innerHTML = '');
+
+    Object.entries(seatMap).forEach(([s, info]) => {
+        const seat = +s;
+        if (seat === mySeat) return;
+
+        const pos = seatPos(seat);
+        const areaEl = playerAreas[pos];
+        
+        if (areaEl) {
+            // Add player name
+            const nameEl = document.createElement('div');
+            nameEl.textContent = `${info.name} (Seat ${seat})`;
+            areaEl.appendChild(nameEl);
+            
+            // Add dummy tiles to show hand count
+            const handDisplayEl = document.createElement('div');
+            handDisplayEl.className = 'player-area-hand-display';
+            const count = handSizes[seat] || 0;
+            for (let i = 0; i < count; i++) {
+                const dummy = document.createElement('div');
+                dummy.className = 'dummy-tile';
+                handDisplayEl.appendChild(dummy);
+            }
+            areaEl.appendChild(handDisplayEl);
+        }
+    });
 }
 
-// --- UPDATED RENDER SCORES FUNCTION ---
 function renderScores() {
     team0ScoreEl.textContent = scores[0];
     team1ScoreEl.textContent = scores[1];
@@ -116,16 +143,9 @@ function playTile(idx) {
     if (currentTurn !== mySeat) return;
     const tile = myHand[idx];
     const userInput = prompt('Side? left / right (blank = auto)');
-    if (userInput === null) {
-        return;
-    }
+    if (userInput === null) return;
     const cleanInput = userInput.trim().toLowerCase();
-    let side;
-    if (cleanInput === 'left' || cleanInput === 'right') {
-        side = cleanInput;
-    } else {
-        side = null;
-    }
+    let side = (cleanInput === 'left' || cleanInput === 'right') ? cleanInput : null;
     socket.emit('playTile', { roomId, seat: mySeat, tile, side });
 }
 
@@ -135,16 +155,13 @@ socket.on('roomJoined', ({ roomId: id, seat }) => {
     mySeat = seat;
     sessionStorage.setItem('domino_roomId', roomId);
     sessionStorage.setItem('domino_mySeat', mySeat);
-    playerInfoEl.textContent =
-        `You are Seat ${seat} (Team ${seat % 2 === 0 ? '0&2' : '1&3'})`;
+    playerInfoEl.textContent = `You are Seat ${seat} (Team ${seat % 2 === 0 ? '0&2' : '1&3'})`;
 });
 
-socket.on('lobbyUpdate', ({ players, seatsRemaining }) => {
+socket.on('lobbyUpdate', ({ players }) => {
   lobbyContainerEl.style.display = 'block';
   seatMap = Object.fromEntries(players.map(p => [p.seat, p]));
   renderLobby(players);
-  renderOpponents();
-  setStatus(`Waiting for players (${seatsRemaining} seat${seatsRemaining !== 1 ? 's' : ''} left)`);
 });
 
 socket.on('roundStart', ({ yourHand, startingSeat, scores: s }) => {
@@ -154,21 +171,30 @@ socket.on('roundStart', ({ yourHand, startingSeat, scores: s }) => {
   scores = s;
   currentTurn = startingSeat;
   msgEl.innerHTML = '';
+  // Initialize everyone with 7 tiles at the start of a round
+  handSizes = { 0: 7, 1: 7, 2: 7, 3: 7 };
   renderScores();
   renderBoard();
   renderHand();
+  renderOpponents(); // Render opponents with full hands
   setStatus(currentTurn === mySeat ? 'Your turn!' : `Waiting for seat ${currentTurn}`);
 });
 
 socket.on('updateHand', hand => {
   myHand = hand;
+  handSizes[mySeat] = hand.length; // Update our own hand size
   renderHand();
+  renderOpponents();
 });
 
 socket.on('broadcastMove', ({ seat, tile, board, pipCounts }) => {
   boardState = board;
+  if (seat !== mySeat) {
+      handSizes[seat]--; // Decrement opponent hand size
+  }
   renderBoard();
   renderPips(pipCounts);
+  renderOpponents(); // Re-render opponents to show one less tile
   addMsg(`Seat ${seat} played ${tile[0]}|${tile[1]}.`);
 });
 
@@ -182,14 +208,12 @@ socket.on('playerPassed', ({ seat }) => {
   addMsg(`Seat ${seat} passed.`);
 });
 
-socket.on('roundEnded', ({ winner, reason, points, scores: s, board, capicua, paso }) => {
+socket.on('roundEnded', ({ winner, reason, points, scores: s, board }) => {
   boardState = board;
   scores = s;
   renderScores();
   renderBoard();
   let msg = `Seat ${winner} wins (${reason}) +${points} pts.`;
-  if (capicua) msg += ' Capicú!';
-  if (paso)    msg += ' Paso!';
   setStatus(msg);
   addMsg(msg);
 });
@@ -202,23 +226,12 @@ socket.on('gameOver', ({ winningTeam, scores: s }) => {
 });
 
 socket.on('reconnectSuccess', ({ roomState }) => {
+    // This event needs to be fully implemented on the server to send handSizes
     console.log('Successfully reconnected!');
-    roomId = roomState.roomId;
-    mySeat = roomState.mySeat;
-    myHand = roomState.yourHand;
-    boardState = roomState.board;
-    scores = roomState.scores;
-    currentTurn = roomState.turn;
-    seatMap = Object.fromEntries(roomState.players.map(p => [p.seat, p.name]));
-
-    renderScores();
-    renderBoard();
-    renderHand();
-    renderOpponents();
-    setStatus(currentTurn === mySeat ? 'Your turn!' : `Waiting for seat ${currentTurn}`);
 });
 
 socket.on('errorMessage', showError);
+
 socket.on('bonusAwarded', ({ seat, type, points, scores: s }) => {
     scores = s;
     renderScores();

@@ -10,22 +10,16 @@
     <style>
         /* --- General Setup & Theming --- */
         :root {
-            --table-bg: #004d26; /* Classic green game table */
+            --table-bg: #004d26;
             --panel-bg: #f5f5f5;
             --tile-bg: #ffffff;
             --text-dark: #333333;
             --text-light: #ffffff;
             --border-color: #cccccc;
-            --accent-color: #ffc107; /* Gold for highlights */
+            --accent-color: #ffc107;
             --error-color: #d9534f;
         }
-
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             font-family: 'Poppins', sans-serif;
             background-color: var(--table-bg);
@@ -37,10 +31,10 @@
             padding: 1rem;
         }
 
-        /* --- Main Layout (CSS Grid) --- */
+        /* --- Main Layout --- */
         .game-container {
             display: grid;
-            grid-template-columns: 250px 1fr; /* Sidebar and main game area */
+            grid-template-columns: 250px 1fr;
             grid-template-rows: 1fr;
             gap: 1.5rem;
             width: 100%;
@@ -48,7 +42,6 @@
             height: 90vh;
             max-height: 900px;
         }
-
         .info-panel {
             background-color: var(--panel-bg);
             border-radius: 8px;
@@ -59,7 +52,6 @@
             box-shadow: 0 4px 12px rgba(0,0,0,0.2);
             overflow-y: auto;
         }
-
         .game-table {
             display: grid;
             grid-template-columns: 150px 1fr 150px;
@@ -72,31 +64,21 @@
         }
 
         /* --- Component Styling --- */
-        .info-section {
-            border-top: 1px solid var(--border-color);
-            padding-top: 1rem;
-        }
-        .info-section:first-child {
-            border-top: none;
-            padding-top: 0;
-        }
-        .info-section h3 {
-            margin-bottom: 0.5rem;
-            font-size: 1.1rem;
-        }
-
+        .info-section { border-top: 1px solid var(--border-color); padding-top: 1rem; }
+        .info-section:first-child { border-top: none; padding-top: 0; }
+        .info-section h3 { margin-bottom: 0.5rem; font-size: 1.1rem; }
         #status { font-weight: 600; font-size: 1.2rem; }
         #errors { color: var(--error-color); font-weight: 600; min-height: 1.2em; }
         #messages { max-height: 200px; overflow-y: auto; font-size: 0.9rem; }
         #messages > div { padding: 2px 0; border-bottom: 1px solid #eee; }
 
-        /* --- Player Areas --- */
+        /* --- Player Areas & Board --- */
         .player-area { color: var(--text-light); padding: 0.5rem; text-align: center; }
+        .player-area-hand-display { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; margin-top: 8px; }
         #topPlayer    { grid-area: top-player; }
         #leftPlayer   { grid-area: left-player; align-self: center; }
         #rightPlayer  { grid-area: right-player; align-self: center; }
         #hand         { grid-area: player-hand; }
-
         #board {
             grid-area: board;
             display: flex;
@@ -116,6 +98,7 @@
             justify-content: center;
             border: 1px solid #999;
             background: var(--tile-bg);
+            color: var(--text-dark); /* <-- THE FIX for invisible numbers */
             padding: 0.4rem 0.8rem;
             font-weight: 600;
             font-size: 1.2rem;
@@ -124,49 +107,35 @@
             transition: all 0.2s ease-in-out;
             cursor: pointer;
         }
-
         .tile.disabled { opacity: 0.6; cursor: default; box-shadow: none; }
-
         .tile.your-turn {
             border-color: var(--accent-color);
             box-shadow: 0 0 15px var(--accent-color);
             transform: translateY(-5px);
         }
         .tile.your-turn:hover { background-color: #fffde7; }
+
+        /* --- NEW: Dummy tile for opponent hands --- */
+        .dummy-tile {
+            background: #555;
+            border: 1px solid #333;
+            width: 20px;
+            height: 30px;
+            border-radius: 3px;
+            box-shadow: 1px 1px 3px rgba(0,0,0,0.4);
+        }
         
-        /* --- NEW: Score Display Styling --- */
-        .score-display {
-            display: flex;
-            justify-content: space-around;
-            gap: 1rem;
-            text-align: center;
-        }
-        .score-box {
-            background: #e9e9e9;
-            padding: 0.5rem;
-            border-radius: 6px;
-            width: 100%;
-            border-bottom: 4px solid #ccc;
-        }
-        .score-box span {
-            font-size: 0.8rem;
-            display: block;
-            color: #666;
-            font-weight: 600;
-        }
-        .score-box strong {
-            font-size: 1.8rem;
-            line-height: 1.1;
-            display: block;
-            color: var(--text-dark);
-        }
-        .your-team-color { border-color: #4CAF50; } /* Green for your team */
-        .opponent-team-color { border-color: #F44336; } /* Red for opponents */
+        /* --- Score Display Styling --- */
+        .score-display { display: flex; justify-content: space-around; gap: 1rem; text-align: center; }
+        .score-box { background: #e9e9e9; padding: 0.5rem; border-radius: 6px; width: 100%; border-bottom: 4px solid #ccc; }
+        .score-box span { font-size: 0.8rem; display: block; color: #666; font-weight: 600; }
+        .score-box strong { font-size: 1.8rem; line-height: 1.1; display: block; color: var(--text-dark); }
+        .your-team-color { border-color: #4CAF50; }
+        .opponent-team-color { border-color: #F44336; }
 
     </style>
 </head>
 <body>
-
     <div class="game-container">
         <div class="info-panel">
             <div class="info-section">
@@ -174,12 +143,10 @@
                 <p id="playerInfo">Connecting...</p>
                 <div id="errors"></div>
             </div>
-
             <div class="info-section">
                 <h3>Status</h3>
                 <p id="status">Waiting for players...</p>
             </div>
-
             <div class="info-section">
                 <h3>Scores</h3>
                 <div class="score-display">
@@ -193,23 +160,19 @@
                     </div>
                 </div>
             </div>
-
             <div class="info-section">
                 <h3>Pip Counts</h3>
                 <p id="pipCounts">-</p>
             </div>
-            
             <div class="info-section" style="display:none;" id="lobbyContainer">
                 <h3>Lobby</h3>
                 <ul id="lobbyList"></ul>
             </div>
-
             <div class="info-section">
                 <h3>Game Events</h3>
                 <div id="messages"></div>
             </div>
         </div>
-
         <div class="game-table">
             <div id="topPlayer" class="player-area"></div>
             <div id="leftPlayer" class="player-area"></div>
@@ -218,7 +181,6 @@
             <div id="hand" class="player-area"></div>
         </div>
     </div>
-
     <script src="/socket.io/socket.io.js"></script>
     <script src="client.js"></script>
 </body>
