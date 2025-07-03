@@ -44,7 +44,7 @@ function createRoom(id) {
   rooms[id] = {
     id,
     players        : {},
-    isGameStarted  : false, // <-- RENAMED for clarity
+    isGameStarted  : false,
 
     /* round-state */
     board          : [],
@@ -137,8 +137,9 @@ function stepTurn(room) {
     return room.passCount===4 ? handleTranca(room) : setImmediate(()=>stepTurn(room));
   }
 
-  const canPlay = player.hand.some(([x,y]) =>
-      x===room.leftEnd || y===room.leftEnd || x===room.rightEnd || y===room.rightEnd);
+  // THIS IS THE CORRECTED LINE
+  const canPlay = room.board.length === 0 || player.hand.some(([x, y]) =>
+      x === room.leftEnd || y === room.leftEnd || x === room.rightEnd || y === room.rightEnd);
 
   if (canPlay) {
     room.passCount = 0;
@@ -304,8 +305,6 @@ io.on('connection', socket=>{
       }
     }
 
-    // --- New join path ---
-    // UPDATED to use the isGameStarted flag for more reliable matchmaking
     let room = Object.values(rooms).find(r => !r.isGameStarted && Object.keys(r.players).length < 4);
     if (!room) room = createRoom(`room${roomCounter++}`);
 
@@ -321,7 +320,7 @@ io.on('connection', socket=>{
     });
 
     if (Object.keys(room.players).length===4){
-      room.isGameStarted = true; // UPDATED to use the consistent flag
+      room.isGameStarted = true;
       io.in(room.id).emit('allPlayersReady');
       setTimeout(()=>initNewRound(room),1500);
     }
@@ -392,27 +391,22 @@ io.on('connection', socket=>{
     }
   });
 
-  /* ---------- Disconnect handling (FULLY REWRITTEN) ---------- */
   socket.on('disconnect', () => {
     for (const room of Object.values(rooms)) {
         const player = Object.values(room.players).find(p => p.socketId === socket.id);
 
         if (!player) continue;
 
-        // Check if the game hasn't started yet (player is in lobby)
         if (!room.isGameStarted) {
             delete room.players[player.seat];
-            // Notify remaining players in the lobby that a spot opened up.
             io.in(room.id).emit('lobbyUpdate', {
                 players: Object.values(room.players).map(p => ({ seat: p.seat, name: p.name })),
                 seatsRemaining: 4 - Object.keys(room.players).length
             });
         } else {
-            // Player left a game in progress.
             player.isConnected = false;
             io.in(room.id).emit('playerDisconnected', { seat: player.seat, name: player.name });
 
-            // Start the 60-second reconnect timer.
             room.reconnectTimers[player.seat] = setTimeout(() => {
                 if (!player.isConnected) {
                     io.in(room.id).emit('gameOver', {
@@ -423,7 +417,6 @@ io.on('connection', socket=>{
                 }
             }, 60000);
 
-            // If it was the disconnected player's turn, advance play.
             if (room.turn === player.seat && !room.isRoundOver) {
                 stepTurn(room);
             }
