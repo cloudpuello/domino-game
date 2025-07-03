@@ -1,5 +1,5 @@
 /* =========================================================================
-   client.js — (Final, Reconnect Bug Fixed)
+   client.js — (Updated for New Scoreboard)
    ========================================================================= */
 
 // ── Socket + basic state ────────────────────────────────────────────────
@@ -20,7 +20,6 @@ const boardEl          = document.getElementById('board');
 const handEl           = document.getElementById('hand');
 const lobbyListEl      = document.getElementById('lobbyList');
 const lobbyContainerEl = document.getElementById('lobbyContainer');
-const scoresEl         = document.getElementById('scores');
 const playerInfoEl     = document.getElementById('playerInfo');
 const errorsEl         = document.getElementById('errors');
 const msgEl            = document.getElementById('messages');
@@ -28,18 +27,16 @@ const pipEl            = document.getElementById('pipCounts');
 const topEl            = document.getElementById('topPlayer');
 const leftEl           = document.getElementById('leftPlayer');
 const rightEl          = document.getElementById('rightPlayer');
+// --- UPDATED DOM HANDLES FOR SCORES ---
+const team0ScoreEl = document.getElementById('team0-score');
+const team1ScoreEl = document.getElementById('team1-score');
 
-
-// ------------------- THIS SECTION HAS BEEN UPDATED -------------------
 // Check if we are reconnecting to a game stored in the session
 const reconnectData = {
     roomId: sessionStorage.getItem('domino_roomId'),
     reconnectSeat: sessionStorage.getItem('domino_mySeat')
 };
-
-// Ask server for a room, sending reconnect data if it exists
 socket.emit('findRoom', { playerName, ...reconnectData });
-// ---------------------------------------------------------------------
 
 
 /* ── Helpers ──────────────────────────────────────────────────────────── */
@@ -96,14 +93,16 @@ function renderOpponents() {
   topEl.textContent = leftEl.textContent = rightEl.textContent = '';
   Object.entries(seatMap).forEach(([s, info]) => {
     const pos = seatPos(+s);
-    if (pos === 'top')   topEl.textContent   = `Seat ${s}: ${info.name}`;
-    if (pos === 'left')  leftEl.textContent  = `Seat ${s}: ${info.name}`;
-    if (pos === 'right') rightEl.textContent = `Seat ${s}: ${info.name}`;
+    if (pos === 'top')   topEl.textContent   = `${info.name} (Seat ${s})`;
+    if (pos === 'left')  leftEl.textContent  = `${info.name} (Seat ${s})`;
+    if (pos === 'right') rightEl.textContent = `${info.name} (Seat ${s})`;
   });
 }
 
+// --- UPDATED RENDER SCORES FUNCTION ---
 function renderScores() {
-  scoresEl.textContent = `Team 0&2: ${scores[0]} — Team 1&3: ${scores[1]}`;
+    team0ScoreEl.textContent = scores[0];
+    team1ScoreEl.textContent = scores[1];
 }
 
 function renderPips(pipCounts) {
@@ -131,17 +130,11 @@ function playTile(idx) {
 }
 
 /* ── Socket events ────────────────────────────────────────────────────── */
-
 socket.on('roomJoined', ({ roomId: id, seat }) => {
     roomId = id;
     mySeat = seat;
-
-    // ------------------- THIS SECTION HAS BEEN UPDATED -------------------
-    // Save game identity to session storage to survive a page refresh
     sessionStorage.setItem('domino_roomId', roomId);
     sessionStorage.setItem('domino_mySeat', mySeat);
-    // ---------------------------------------------------------------------
-
     playerInfoEl.textContent =
         `You are Seat ${seat} (Team ${seat % 2 === 0 ? '0&2' : '1&3'})`;
 });
@@ -189,12 +182,11 @@ socket.on('playerPassed', ({ seat }) => {
   addMsg(`Seat ${seat} passed.`);
 });
 
-socket.on('roundEnded', ({ winner, reason, points, scores: s, board, capicua, paso, pipCounts }) => {
+socket.on('roundEnded', ({ winner, reason, points, scores: s, board, capicua, paso }) => {
   boardState = board;
   scores = s;
   renderScores();
   renderBoard();
-  renderPips(pipCounts);
   let msg = `Seat ${winner} wins (${reason}) +${points} pts.`;
   if (capicua) msg += ' Capicú!';
   if (paso)    msg += ' Paso!';
@@ -202,15 +194,13 @@ socket.on('roundEnded', ({ winner, reason, points, scores: s, board, capicua, pa
   addMsg(msg);
 });
 
-socket.on('gameOver', ({ winningTeam, scores }) => {
-  // Clear storage when the game is truly over
+socket.on('gameOver', ({ winningTeam, scores: s }) => {
   sessionStorage.removeItem('domino_roomId');
   sessionStorage.removeItem('domino_mySeat');
-  alert(`Game over! Team ${winningTeam} wins.\nScores: ${scores.join(' / ')}`);
+  alert(`Game over! Team ${winningTeam} wins.\nScores: ${s.join(' / ')}`);
   setStatus('Game over.');
 });
 
-// A new event to fully restore state on successful reconnect
 socket.on('reconnectSuccess', ({ roomState }) => {
     console.log('Successfully reconnected!');
     roomId = roomState.roomId;
@@ -219,9 +209,8 @@ socket.on('reconnectSuccess', ({ roomState }) => {
     boardState = roomState.board;
     scores = roomState.scores;
     currentTurn = roomState.turn;
-    seatMap = Object.fromEntries(roomState.players.map(p => [p.seat, p]));
+    seatMap = Object.fromEntries(roomState.players.map(p => [p.seat, p.name]));
 
-    // Re-render everything
     renderScores();
     renderBoard();
     renderHand();
@@ -230,4 +219,8 @@ socket.on('reconnectSuccess', ({ roomState }) => {
 });
 
 socket.on('errorMessage', showError);
-socket.on('message', msg => addMsg(msg));
+socket.on('bonusAwarded', ({ seat, type, points, scores: s }) => {
+    scores = s;
+    renderScores();
+    addMsg(`Team ${seat % 2} gets +${points} pts for ${type}!`);
+});
