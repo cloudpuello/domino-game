@@ -1,5 +1,5 @@
 /* ============================================================================
- * server.js — (Pass Counter Bug Fixed)
+ * server.js — (Winning with Bonus Bug Fixed)
  * ========================================================================= */
 
 const express = require('express');
@@ -134,7 +134,7 @@ function stepTurn(room) {
   if (!player.isConnected) {
     room.passCount++;
     io.in(room.id).emit('playerPassed', { seat: room.turn, reason:'disconnected' });
-    return room.passCount===4 ? handleTranca(room) : setImmediate(()=>stepTurn(room));
+    return room.passCount>=4 ? handleTranca(room) : setImmediate(()=>stepTurn(room));
   }
 
   const canPlay = room.board.length === 0 || player.hand.some(([x, y]) =>
@@ -147,7 +147,7 @@ function stepTurn(room) {
   } else {
     room.passCount++;
     io.in(room.id).emit('playerPassed', { seat: room.turn });
-    if (room.passCount>=4) handleTranca(room); // Use >= to be safe
+    if (room.passCount>=4) handleTranca(room);
     else setImmediate(()=>stepTurn(room));
   }
 }
@@ -188,40 +188,57 @@ function handleTranca(room) {
   setTimeout(()=>maybeStartNextRound(room),4000);
 }
 
+// --- THIS FUNCTION IS REWRITTEN TO HANDLE THE NEW BONUS RULE ---
 function handleRoundWin(room, winnerSeat, endsBefore) {
-  if (room.isRoundOver) return;
-  room.isRoundOver = true;
+    if (room.isRoundOver) return;
+    room.isRoundOver = true;
 
-  const team = teamOf(winnerSeat);
+    const team = teamOf(winnerSeat);
+    const pipSum = Object.values(room.players).reduce((s, p) => s + p.handSum(), 0);
 
-  const capicua = endsBefore.left!==endsBefore.right && room.leftEnd===room.rightEnd;
+    let bonus = 0;
+    let pointsAwarded = pipSum;
+    let capicua = false;
+    let paso = false;
 
-  const paso = !Object.values(room.players).some(p =>
-    p.seat!==winnerSeat &&
-    p.hand.some(([x,y])=> x===room.leftEnd||y===room.leftEnd||x===room.rightEnd||y===room.rightEnd)
-  );
+    // Add the pip sum to the score first.
+    room.scores[team] += pipSum;
 
-  let bonus = 0;
-  if (capicua && paso) bonus = 60;
-  else if (capicua || paso) bonus = 30;
+    // Check if the game is won with only the pip points.
+    const isGameOver = room.scores[team] >= 200;
 
-  const pipSum = Object.values(room.players).reduce((s,p)=>s+p.handSum(),0);
-  const points = pipSum + bonus;
+    // Only if the game is NOT already won, we calculate and add bonus points.
+    if (!isGameOver) {
+        capicua = endsBefore.left !== endsBefore.right && room.leftEnd === room.rightEnd;
+        paso = !Object.values(room.players).some(p =>
+            p.seat !== winnerSeat &&
+            p.hand.some(([x, y]) => x === room.leftEnd || y === room.leftEnd || x === room.rightEnd || y === room.rightEnd)
+        );
 
-  room.scores[team] += points;
-  room.lastWinnerSeat = winnerSeat;
-  room.isFirstRound   = false;
+        if (capicua && paso) bonus = 60;
+        else if (capicua || paso) bonus = 30;
 
-  io.in(room.id).emit('roundEnded',{
-    reason:'Closed',
-    winner:winnerSeat,
-    winningTeam:team,
-    capicua, paso,
-    points,
-    scores:room.scores
-  });
-  broadcastHands(room);
-  setTimeout(()=>maybeStartNextRound(room),4000);
+        if (bonus > 0) {
+            room.scores[team] += bonus;
+            pointsAwarded += bonus;
+        }
+    }
+
+    room.lastWinnerSeat = winnerSeat;
+    room.isFirstRound = false;
+
+    io.in(room.id).emit('roundEnded', {
+        reason: 'Closed',
+        winner: winnerSeat,
+        winningTeam: team,
+        capicua,
+        paso,
+        points: pointsAwarded,
+        scores: room.scores
+    });
+
+    broadcastHands(room);
+    setTimeout(() => maybeStartNextRound(room), 4000);
 }
 
 function maybeStartNextRound(room) {
@@ -346,7 +363,6 @@ io.on('connection', socket=>{
       }
     }
     
-    // THE FIX: Reset passCount on a successful play
     room.passCount = 0;
 
     room.pipCounts[tile[0]]++;
