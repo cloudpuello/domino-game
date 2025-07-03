@@ -1,5 +1,5 @@
 /* =========================================================================
-   client.js — (Final, Fully Synced Version)
+   client.js — (Final, Fully Corrected Version)
    ========================================================================= */
 
 // ── Socket + basic state ────────────────────────────────────────────────
@@ -7,12 +7,12 @@ const socket = io();
 const playerName = prompt('Enter your name:') || 'Anonymous';
 
 let roomId        = null;
-let mySeat        = null;        // 0-3
-let currentTurn   = null;        // whose turn
+let mySeat        = null;
+let currentTurn   = null;
 let myHand        = [];
 let boardState    = [];
-let scores        = [0, 0];      // [team 0&2, team 1&3]
-let seatMap       = {};          // seat → { name }
+let scores        = [0, 0];
+let seatMap       = {};
 
 // ── DOM handles ─────────────────────────────────────────────────────────
 const statusEl         = document.getElementById('status');
@@ -103,44 +103,32 @@ function renderPips(pipCounts) {
 }
 
 /* ── Moves ────────────────────────────────────────────────────────────── */
-
-// THIS FUNCTION IS NOW FIXED AND MORE ROBUST
 function playTile(idx) {
     if (currentTurn !== mySeat) return;
-
     const tile = myHand[idx];
     const userInput = prompt('Side? left / right (blank = auto)');
-
-    // 1. If the user clicks "Cancel", do nothing.
     if (userInput === null) {
         return;
     }
-
-    // 2. Clean up the input to be more flexible.
     const cleanInput = userInput.trim().toLowerCase();
-    
     let side;
     if (cleanInput === 'left' || cleanInput === 'right') {
         side = cleanInput;
     } else {
-        // 3. Any other input (including blank) counts as "auto".
         side = null;
     }
-
     socket.emit('playTile', { roomId, seat: mySeat, tile, side });
 }
 
-
 /* ── Socket events ────────────────────────────────────────────────────── */
-socket.on('roomAssigned', ({ room }) => {
-  roomId = room;
-  setStatus(`Joined room ${room}. Waiting for others…`);
-});
+// This event is no longer used by the server, it can be deleted.
+// socket.on('roomAssigned', ({ room }) => { ... });
 
-socket.on('roomJoined', ({ seat }) => {
-  mySeat = seat;
-  playerInfoEl.textContent =
-    `You are Seat ${seat} (Team ${seat % 2 === 0 ? '0&2' : '1&3'})`;
+socket.on('roomJoined', ({ roomId: id, seat }) => {
+    roomId = id; // <-- THE CRITICAL FIX
+    mySeat = seat;
+    playerInfoEl.textContent =
+        `You are Seat ${seat} (Team ${seat % 2 === 0 ? '0&2' : '1&3'})`;
 });
 
 socket.on('lobbyUpdate', ({ players, seatsRemaining }) => {
