@@ -1,5 +1,5 @@
 /* ============================================================================
- * server.js — (Clockwise Turn Order)
+ * server.js — (Pass Counter Bug Fixed)
  * ========================================================================= */
 
 const express = require('express');
@@ -16,7 +16,7 @@ app.use(express.static('public'));
 /* -------------------------------------------------------------------------- */
 /* Helpers & constants                                                       */
 /* -------------------------------------------------------------------------- */
-const turnOrder = [0, 1, 2, 3]; // <-- THIS LINE IS UPDATED
+const turnOrder = [0, 1, 2, 3];
 const nextSeat  = seat => turnOrder[(turnOrder.indexOf(seat) + 1) % 4];
 const teamOf    = seat => seat % 2;
 
@@ -147,7 +147,7 @@ function stepTurn(room) {
   } else {
     room.passCount++;
     io.in(room.id).emit('playerPassed', { seat: room.turn });
-    if (room.passCount===4) handleTranca(room);
+    if (room.passCount>=4) handleTranca(room); // Use >= to be safe
     else setImmediate(()=>stepTurn(room));
   }
 }
@@ -345,6 +345,9 @@ io.on('connection', socket=>{
         return;
       }
     }
+    
+    // THE FIX: Reset passCount on a successful play
+    room.passCount = 0;
 
     room.pipCounts[tile[0]]++;
     room.pipCounts[tile[1]]++;
