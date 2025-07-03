@@ -1,5 +1,5 @@
 /* =========================================================================
-   client.js — (Final, Fully Corrected Version)
+   client.js — (Final, Reconnect Bug Fixed)
    ========================================================================= */
 
 // ── Socket + basic state ────────────────────────────────────────────────
@@ -29,8 +29,18 @@ const topEl            = document.getElementById('topPlayer');
 const leftEl           = document.getElementById('leftPlayer');
 const rightEl          = document.getElementById('rightPlayer');
 
-// ask server for a room
-socket.emit('findRoom', { playerName });
+
+// ------------------- THIS SECTION HAS BEEN UPDATED -------------------
+// Check if we are reconnecting to a game stored in the session
+const reconnectData = {
+    roomId: sessionStorage.getItem('domino_roomId'),
+    reconnectSeat: sessionStorage.getItem('domino_mySeat')
+};
+
+// Ask server for a room, sending reconnect data if it exists
+socket.emit('findRoom', { playerName, ...reconnectData });
+// ---------------------------------------------------------------------
+
 
 /* ── Helpers ──────────────────────────────────────────────────────────── */
 const setStatus = txt => (statusEl.textContent = txt);
@@ -121,12 +131,17 @@ function playTile(idx) {
 }
 
 /* ── Socket events ────────────────────────────────────────────────────── */
-// This event is no longer used by the server, it can be deleted.
-// socket.on('roomAssigned', ({ room }) => { ... });
 
 socket.on('roomJoined', ({ roomId: id, seat }) => {
-    roomId = id; // <-- THE CRITICAL FIX
+    roomId = id;
     mySeat = seat;
+
+    // ------------------- THIS SECTION HAS BEEN UPDATED -------------------
+    // Save game identity to session storage to survive a page refresh
+    sessionStorage.setItem('domino_roomId', roomId);
+    sessionStorage.setItem('domino_mySeat', mySeat);
+    // ---------------------------------------------------------------------
+
     playerInfoEl.textContent =
         `You are Seat ${seat} (Team ${seat % 2 === 0 ? '0&2' : '1&3'})`;
 });
@@ -188,8 +203,30 @@ socket.on('roundEnded', ({ winner, reason, points, scores: s, board, capicua, pa
 });
 
 socket.on('gameOver', ({ winningTeam, scores }) => {
+  // Clear storage when the game is truly over
+  sessionStorage.removeItem('domino_roomId');
+  sessionStorage.removeItem('domino_mySeat');
   alert(`Game over! Team ${winningTeam} wins.\nScores: ${scores.join(' / ')}`);
   setStatus('Game over.');
+});
+
+// A new event to fully restore state on successful reconnect
+socket.on('reconnectSuccess', ({ roomState }) => {
+    console.log('Successfully reconnected!');
+    roomId = roomState.roomId;
+    mySeat = roomState.mySeat;
+    myHand = roomState.yourHand;
+    boardState = roomState.board;
+    scores = roomState.scores;
+    currentTurn = roomState.turn;
+    seatMap = Object.fromEntries(roomState.players.map(p => [p.seat, p]));
+
+    // Re-render everything
+    renderScores();
+    renderBoard();
+    renderHand();
+    renderOpponents();
+    setStatus(currentTurn === mySeat ? 'Your turn!' : `Waiting for seat ${currentTurn}`);
 });
 
 socket.on('errorMessage', showError);
