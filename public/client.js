@@ -1,5 +1,5 @@
 /* =========================================================================
-   client.js — (All Fixes + Opponent Hand Display)
+   client.js — (All Features & Fixes Included)
    ========================================================================= */
 
 // ── Socket + basic state ────────────────────────────────────────────────
@@ -13,7 +13,7 @@ let myHand        = [];
 let boardState    = [];
 let scores        = [0, 0];
 let seatMap       = {};
-let handSizes     = {}; // NEW: To track opponent hand counts
+let handSizes     = {};
 
 // ── DOM handles ─────────────────────────────────────────────────────────
 const statusEl         = document.getElementById('status');
@@ -89,15 +89,8 @@ function seatPos(seat) {
   return 'left';
 }
 
-// --- THIS FUNCTION IS UPDATED TO SHOW OPPONENT HANDS ---
 function renderOpponents() {
-    const playerAreas = {
-        top: topEl,
-        left: leftEl,
-        right: rightEl,
-    };
-
-    // Clear all opponent areas first
+    const playerAreas = { top: topEl, left: leftEl, right: rightEl };
     Object.values(playerAreas).forEach(el => el.innerHTML = '');
 
     Object.entries(seatMap).forEach(([s, info]) => {
@@ -108,12 +101,10 @@ function renderOpponents() {
         const areaEl = playerAreas[pos];
         
         if (areaEl) {
-            // Add player name
             const nameEl = document.createElement('div');
             nameEl.textContent = `${info.name} (Seat ${seat})`;
             areaEl.appendChild(nameEl);
             
-            // Add dummy tiles to show hand count
             const handDisplayEl = document.createElement('div');
             handDisplayEl.className = 'player-area-hand-display';
             const count = handSizes[seat] || 0;
@@ -171,18 +162,17 @@ socket.on('roundStart', ({ yourHand, startingSeat, scores: s }) => {
   scores = s;
   currentTurn = startingSeat;
   msgEl.innerHTML = '';
-  // Initialize everyone with 7 tiles at the start of a round
   handSizes = { 0: 7, 1: 7, 2: 7, 3: 7 };
   renderScores();
   renderBoard();
   renderHand();
-  renderOpponents(); // Render opponents with full hands
+  renderOpponents();
   setStatus(currentTurn === mySeat ? 'Your turn!' : `Waiting for seat ${currentTurn}`);
 });
 
 socket.on('updateHand', hand => {
   myHand = hand;
-  handSizes[mySeat] = hand.length; // Update our own hand size
+  handSizes[mySeat] = hand.length;
   renderHand();
   renderOpponents();
 });
@@ -190,18 +180,31 @@ socket.on('updateHand', hand => {
 socket.on('broadcastMove', ({ seat, tile, board, pipCounts }) => {
   boardState = board;
   if (seat !== mySeat) {
-      handSizes[seat]--; // Decrement opponent hand size
+      handSizes[seat]--;
   }
   renderBoard();
   renderPips(pipCounts);
-  renderOpponents(); // Re-render opponents to show one less tile
+  renderOpponents();
   addMsg(`Seat ${seat} played ${tile[0]}|${tile[1]}.`);
 });
 
+// --- THIS FUNCTION IS UPDATED WITH THE VISUAL INDICATOR LOGIC ---
 socket.on('turnChanged', turn => {
-  currentTurn = turn;
-  setStatus(turn === mySeat ? 'Your turn!' : `Waiting for seat ${turn}`);
-  renderHand();
+    currentTurn = turn;
+    setStatus(turn === mySeat ? 'Your turn!' : `Waiting for seat ${turn}`);
+    renderHand();
+
+    // Remove indicator from all player areas first
+    [topEl, leftEl, rightEl, handEl].forEach(el => {
+        el.classList.remove('active-turn-indicator');
+    });
+
+    // Add indicator to the correct player area
+    const pos = seatPos(turn);
+    if (pos === 'top') topEl.classList.add('active-turn-indicator');
+    else if (pos === 'left') leftEl.classList.add('active-turn-indicator');
+    else if (pos === 'right') rightEl.classList.add('active-turn-indicator');
+    else if (pos === 'self') handEl.classList.add('active-turn-indicator');
 });
 
 socket.on('playerPassed', ({ seat }) => {
@@ -226,7 +229,7 @@ socket.on('gameOver', ({ winningTeam, scores: s }) => {
 });
 
 socket.on('reconnectSuccess', ({ roomState }) => {
-    // This event needs to be fully implemented on the server to send handSizes
+    // This event needs to be fully implemented on the server
     console.log('Successfully reconnected!');
 });
 
