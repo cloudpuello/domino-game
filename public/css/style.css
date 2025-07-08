@@ -1,7 +1,13 @@
+/* --- General Setup & Theming --- */
 :root {
-    --table-bg: #004d26; --panel-bg: #f5f5f5; --tile-bg: #ffffff;
-    --text-dark: #333333; --text-light: #ffffff; --border-color: #cccccc;
-    --accent-color: #ffc107; --error-color: #d9534f;
+    --table-bg: #004d26;
+    --panel-bg: #f5f5f5;
+    --tile-bg: #ffffff;
+    --text-dark: #333333;
+    --text-light: #ffffff;
+    --border-color: #cccccc;
+    --accent-color: #ffc107;
+    --error-color: #d9534f;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
 body {
@@ -27,18 +33,18 @@ body {
 #hand { grid-area: player-hand; }
 #board { grid-area: board; display: flex; flex-wrap: wrap; gap: 5px; align-content: center; justify-content: center; background: rgba(0,0,0,0.1); border-radius: 8px; padding: 1rem; }
 
-/* --- Tile Styling (UPDATED) --- */
+/* --- Tile Styling --- */
 .tile {
     display: inline-flex;
     align-items: center;
-    justify-content: space-around; /* Adds space between numbers */
+    justify-content: space-around;
     border: 1px solid #999;
     background: var(--tile-bg);
     color: var(--text-dark);
     padding: 0.4rem;
     font-weight: 600;
     font-size: 1.2rem;
-    width: 70px; /* Give tiles a fixed width */
+    width: 70px;
     border-radius: 5px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.15);
     cursor: grab;
@@ -78,7 +84,7 @@ body {
     cursor: not-allowed;
 }
 
-/* --- Drag & Drop Styling (UPDATED) --- */
+/* --- Drag & Drop Styling --- */
 .tile.dragging {
     position: fixed;
     z-index: 1000;
@@ -90,6 +96,13 @@ body {
 .drop-target.drop-hover {
     box-shadow: 0 0 25px 8px var(--accent-color) !important;
 }
+
+/* --- NEW: Style for highlighting playable ends on pickup --- */
+.playable-end-highlight {
+    border-color: #00bcd4 !important; /* A bright cyan color */
+    box-shadow: 0 0 20px 5px #00bcd4 !important;
+}
+
 
 /* --- Score Display & Turn Indicator Styling --- */
 .score-display { display: flex; justify-content: space-around; gap: 1rem; text-align: center; }
