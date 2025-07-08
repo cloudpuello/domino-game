@@ -1,8 +1,7 @@
 /* =========================================================================
-   style.css — (T-Shape Placeholders & Double Layout)
+   style.css — (Corrected Board Layout)
    ========================================================================= */
 
-/* --- General Setup & Theming --- */
 :root {
     --table-bg: #004d26;
     --panel-bg: #f5f5f5;
@@ -35,32 +34,26 @@ body {
 #leftPlayer { grid-area: left-player; align-self: center; }
 #rightPlayer { grid-area: right-player; align-self: center; }
 #hand { grid-area: player-hand; }
+
+/* --- THIS RULE IS NOW CORRECTED --- */
 #board {
-    grid-area: board; display: flex; flex-wrap: wrap; gap: 5px;
-    align-items: center; justify-content: center; background: rgba(0,0,0,0.1);
-    border-radius: 8px; padding: 1rem;
-}
-
-/* --- NEW: Container for each tile to handle positioning of placeholders --- */
-.tile-container {
-    position: relative;
+    grid-area: board;
     display: flex;
-    justify-content: center;
+    gap: 5px;
     align-items: center;
-}
-.double-container {
-    margin: 0 10px; /* Give doubles more space */
+    background: rgba(0,0,0,0.1);
+    border-radius: 8px;
+    padding: 1rem;
+    /* Allow horizontal scrolling for a long domino chain */
+    overflow-x: auto;
+    overflow-y: hidden;
 }
 
+.tile-container { position: relative; display: flex; justify-content: center; align-items: center; }
+.double-container { margin: 0 10px; }
 
 /* --- Tile Styling --- */
-.tile {
-    display: inline-flex; align-items: center; justify-content: space-around;
-    border: 1px solid #999; background: var(--tile-bg); color: var(--text-dark);
-    padding: 0.4rem; font-weight: 600; font-size: 1.2rem; width: 70px;
-    border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.15); cursor: grab;
-    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
-}
+.tile { display: inline-flex; align-items: center; justify-content: space-around; border: 1px solid #999; background: var(--tile-bg); color: var(--text-dark); padding: 0.4rem; font-weight: 600; font-size: 1.2rem; width: 70px; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.15); cursor: grab; transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out; }
 .tile > span { border-left: 2px solid #ccc; padding-left: 0.4rem; margin-left: 0.4rem; }
 .tile > span:first-child { border-left: none; padding-left: 0; margin-left: 0; }
 .tile.double { transform: rotate(90deg); }
@@ -69,40 +62,31 @@ body {
 
 .dummy-tile { background: #555; border: 1px solid #333; width: 20px; height: 30px; border-radius: 3px; box-shadow: 1px 1px 3px rgba(0,0,0,0.4); }
 
-.tile-placeholder {
-    border: 3px dashed rgba(255,255,255,0.4); color: rgba(255,255,255,0.6);
-    padding: 0.4rem 0.8rem; font-weight: 600; font-size: 1.2rem; border-radius: 5px;
-    cursor: not-allowed;
-}
-
-/* --- Drag & Drop and Placeholder Styling --- */
-.tile.dragging {
-    position: fixed; z-index: 1000; pointer-events: none;
-    cursor: grabbing; transform: scale(1.1) translateY(-10px);
-    box-shadow: 0 10px 20px rgba(0,0,0,0.25);
-}
-.play-placeholder {
+/* --- THIS RULE IS NOW CORRECTED --- */
+.tile-placeholder, .play-placeholder {
+    flex-shrink: 0; /* Prevent placeholder from shrinking */
     width: 70px;
-    height: 48px; /* Approximate height of a tile */
+    height: 55px;
     border: 3px dashed var(--accent-color);
     border-radius: 5px;
     background: rgba(255, 193, 7, 0.2);
     cursor: pointer;
     transition: background-color 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255, 255, 255, 0.8);
+    font-weight: 600;
+    font-size: 0.8rem;
 }
-.play-placeholder.drop-hover {
-    background: rgba(255, 193, 7, 0.4);
-    border-style: solid;
-}
-/* Styles for perpendicular placeholders for doubles */
-.double-placeholder-top, .double-placeholder-bottom {
-    position: absolute;
-    left: 50%;
-    transform: translateX(-50%) rotate(90deg);
-}
+.tile-placeholder::before, .play-placeholder::before { content: "DROP HERE"; }
+.play-placeholder.drop-hover { background: rgba(255, 193, 7, 0.4); border-style: solid; }
+.double-placeholder-top, .double-placeholder-bottom { position: absolute; left: 50%; transform: translateX(-50%) rotate(90deg); }
 .double-placeholder-top { top: -55px; }
 .double-placeholder-bottom { bottom: -55px; }
 
+/* --- Drag & Drop Styling --- */
+.tile.dragging { position: fixed; z-index: 1000; pointer-events: none; cursor: grabbing; transform: scale(1.1) translateY(-10px); box-shadow: 0 10px 20px rgba(0,0,0,0.25); }
 
 /* --- Score Display & Turn Indicator Styling --- */
 .score-display { display: flex; justify-content: space-around; gap: 1rem; text-align: center; }

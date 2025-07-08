@@ -1,5 +1,5 @@
 /* =========================================================================
-   client.js — (Final, Simplified & Robust Version)
+   client.js — (Final Version with All Fixes)
    ========================================================================= */
 
 const socket = io();
@@ -35,7 +35,6 @@ const showError = txt => { errorsEl.textContent = txt; setTimeout(() => (errorsE
 const addMsg = txt => { const p = document.createElement('div'); p.textContent = txt; msgEl.prepend(p); };
 function renderLobby(players) { lobbyListEl.innerHTML = ''; players.forEach(p => { const li = document.createElement('li'); li.textContent = `Seat ${p.seat}: ${p.name}`; lobbyListEl.appendChild(li); }); }
 
-// --- UPDATED: To correctly add drop targets ---
 function renderBoard() {
     boardEl.innerHTML = '';
     if (boardState.length === 0) {
@@ -82,9 +81,11 @@ function renderHand() {
         d.className = 'tile';
         if (currentTurn !== mySeat) d.classList.add('disabled');
         d.innerHTML = `<span>${tileData[0]}</span><span>${tileData[1]}</span>`;
+
         if (currentTurn === mySeat) {
             d.addEventListener('mousedown', (e) => handleDragStart(e, tileData, d));
             d.addEventListener('touchstart', (e) => handleDragStart(e, tileData, d), { passive: false });
+            d.addEventListener('dragstart', (e) => e.preventDefault()); // <-- THE FIX
         }
         handEl.appendChild(d);
     });
@@ -95,120 +96,17 @@ function renderOpponents() { const playerAreas = { top: topEl, left: leftEl, rig
 function renderScores() { team0ScoreEl.textContent = scores[0]; team1ScoreEl.textContent = scores[1]; }
 function renderPips(pipCounts) { pipEl.textContent = pipCounts ? Object.entries(pipCounts).map(([p, c]) => `${p}:${c}`).join(' | ') : ''; }
 
-/* ─── Drag and Drop Logic (Simplified & Corrected) ────────────────────── */
-
-function handleDragStart(e, tileData, tileElement) {
-    if (e.type === 'touchstart') e.preventDefault();
-    if (dragged.isDragging) return;
-
-    dragged = { tileData, originalTile: tileElement, isDragging: true, hoveredSide: null };
-    dragged.element = tileElement.cloneNode(true);
-    dragged.element.classList.add('dragging');
-    document.body.appendChild(dragged.element);
-    tileElement.classList.add('ghost');
-    
-    highlightPlayableEnds(tileData); // Highlight valid spots
-
-    const pos = getEventPosition(e);
-    moveDraggedElement(pos.x, pos.y);
-
-    document.addEventListener('mousemove', handleDragMove);
-    document.addEventListener('mouseup', handleDragEnd);
-    document.addEventListener('touchmove', handleDragMove, { passive: false });
-    document.addEventListener('touchend', handleDragEnd);
-}
-
-function handleDragMove(e) {
-    if (!dragged.isDragging) return;
-    e.preventDefault();
-    const pos = getEventPosition(e);
-    moveDraggedElement(pos.x, pos.y);
-
-    let onTarget = false;
-    // The drop targets are now the highlighted ends on the board
-    document.querySelectorAll('.playable-end').forEach(target => {
-        const rect = target.getBoundingClientRect();
-        if (pos.x > rect.left && pos.x < rect.right && pos.y > rect.top && pos.y < rect.bottom) {
-            onTarget = true;
-            dragged.hoveredSide = target.dataset.side;
-            target.classList.add('drop-hover');
-        } else {
-            target.classList.remove('drop-hover');
-        }
-    });
-
-    if (!onTarget) dragged.hoveredSide = null;
-}
-
-function handleDragEnd() {
-    if (!dragged.isDragging) return;
-    const { originalTile, tileData, hoveredSide } = dragged;
-    if (hoveredSide) {
-        socket.emit('playTile', { roomId, seat: mySeat, tile: tileData, side: hoveredSide });
-    } else {
-        originalTile.classList.remove('ghost');
-    }
-    cleanupDrag();
-}
-
-function cleanupDrag() {
-    if (dragged.element) dragged.element.remove();
-    // Remove all highlight and hover classes
-    document.querySelectorAll('.playable-end').forEach(el => el.classList.remove('playable-end', 'drop-hover'));
-    document.removeEventListener('mousemove', handleDragMove);
-    document.removeEventListener('mouseup', handleDragEnd);
-    document.removeEventListener('touchmove', handleDragMove);
-    document.removeEventListener('touchend', handleDragEnd);
-    dragged = { element: null, originalTile: null, tileData: null, isDragging: false, hoveredSide: null };
-}
-
-// --- REWRITTEN: To highlight existing tiles, not create new ones ---
-function highlightPlayableEnds(tileData) {
-    const boardEnds = getBoardEnds();
-    const [p1, p2] = tileData;
-
-    // Handle the first move (placeholder)
-    if (!boardEnds) {
-        const isFirstGameRound = scores[0] === 0 && scores[1] === 0;
-        // Only allow playing the [6|6] on the first round
-        if (isFirstGameRound && p1 === 6 && p2 === 6) {
-            const placeholder = boardEl.querySelector('.tile-placeholder');
-            if (placeholder) {
-                placeholder.classList.add('playable-end');
-                placeholder.dataset.side = 'right'; // Default side for the first move
-            }
-        }
-        return;
-    }
-
-    // Handle subsequent moves
-    if (p1 === boardEnds.leftPip || p2 === boardEnds.leftPip) {
-        boardEnds.leftTile.classList.add('playable-end');
-        boardEnds.leftTile.dataset.side = 'left';
-    }
-    // Use `else if` to prevent double-highlighting the same tile if it's the only one
-    else if (p1 === boardEnds.rightPip || p2 === boardEnds.rightPip) {
-        boardEnds.rightTile.classList.add('playable-end');
-        boardEnds.rightTile.dataset.side = 'right';
-    }
-}
-
+/* ─── Drag and Drop Logic ────────────────────── */
+function handleDragStart(e, tileData, tileElement) { if (e.type === 'touchstart') e.preventDefault(); if (dragged.isDragging) return; dragged = { tileData, originalTile: tileElement, isDragging: true, hoveredSide: null }; dragged.element = tileElement.cloneNode(true); dragged.element.classList.add('dragging'); document.body.appendChild(dragged.element); tileElement.classList.add('ghost'); highlightPlayableEnds(tileData); const pos = getEventPosition(e); moveDraggedElement(pos.x, pos.y); document.addEventListener('mousemove', handleDragMove); document.addEventListener('mouseup', handleDragEnd); document.addEventListener('touchmove', handleDragMove, { passive: false }); document.addEventListener('touchend', handleDragEnd); }
+function handleDragMove(e) { if (!dragged.isDragging) return; e.preventDefault(); const pos = getEventPosition(e); moveDraggedElement(pos.x, pos.y); let onTarget = false; document.querySelectorAll('.playable-end').forEach(target => { const rect = target.getBoundingClientRect(); if (pos.x > rect.left && pos.x < rect.right && pos.y > rect.top && pos.y < rect.bottom) { onTarget = true; dragged.hoveredSide = target.dataset.side; target.classList.add('drop-hover'); } else { target.classList.remove('drop-hover'); } }); if (!onTarget) dragged.hoveredSide = null; }
+function handleDragEnd() { if (!dragged.isDragging) return; const { originalTile, tileData, hoveredSide } = dragged; if (hoveredSide) { socket.emit('playTile', { roomId, seat: mySeat, tile: tileData, side: hoveredSide }); } else { originalTile.classList.remove('ghost'); } cleanupDrag(); }
+function cleanupDrag() { if (dragged.element) dragged.element.remove(); document.querySelectorAll('.playable-end').forEach(el => el.classList.remove('playable-end', 'drop-hover')); document.removeEventListener('mousemove', handleDragMove); document.removeEventListener('mouseup', handleDragEnd); document.removeEventListener('touchmove', handleDragMove); document.removeEventListener('touchend', handleDragEnd); dragged = { element: null, originalTile: null, tileData: null, isDragging: false, hoveredSide: null }; }
+function highlightPlayableEnds(tileData) { const boardEnds = getBoardEnds(); const [p1, p2] = tileData; if (!boardEnds) { const isFirstGameRound = scores[0] === 0 && scores[1] === 0; if (isFirstGameRound && p1 === 6 && p2 === 6) { const placeholder = boardEl.querySelector('.tile-placeholder'); if (placeholder) { placeholder.classList.add('playable-end'); placeholder.dataset.side = 'right'; } } return; } if (p1 === boardEnds.leftPip || p2 === boardEnds.leftPip) { boardEnds.leftTile.classList.add('playable-end'); boardEnds.leftTile.dataset.side = 'left'; } if (boardEnds.rightTile !== boardEnds.leftTile) { if (p1 === boardEnds.rightPip || p2 === boardEnds.rightPip) { boardEnds.rightTile.classList.add('playable-end'); boardEnds.rightTile.dataset.side = 'right'; } } }
 function moveDraggedElement(x, y) { if (!dragged.element) return; dragged.element.style.left = `${x}px`; dragged.element.style.top = `${y}px`; }
 function getEventPosition(e) { return e.touches ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : { x: e.clientX, y: e.clientY }; }
+function getBoardEnds() { if (boardState.length === 0) return null; return { leftTile: boardEl.firstChild, leftPip: boardState[0][0], rightTile: boardEl.lastChild, rightPip: boardState[boardState.length - 1][1] }; }
 
-// --- REWRITTEN: To be simpler ---
-function getBoardEnds() {
-    if (boardState.length === 0) return null;
-    return {
-        leftTile: boardEl.firstChild,
-        leftPip: boardState[0][0],
-        rightTile: boardEl.lastChild,
-        rightPip: boardState[boardState.length - 1][1]
-    };
-}
-
-
-// (All socket.on event handlers)
+/* ─── Socket.IO Event Handlers ────────────────────── */
 socket.on('roomJoined', ({ roomId: id, seat }) => { roomId = id; mySeat = seat; sessionStorage.setItem('domino_roomId', roomId); sessionStorage.setItem('domino_mySeat', mySeat); playerInfoEl.textContent = `You are Seat ${seat} (Team ${seat % 2 === 0 ? '0&2' : '1&3'})`; });
 socket.on('lobbyUpdate', ({ players }) => { lobbyContainerEl.style.display = 'block'; seatMap = Object.fromEntries(players.map(p => [p.seat, p])); renderLobby(players); });
 socket.on('roundStart', ({ yourHand, startingSeat, scores: s }) => { lobbyContainerEl.style.display = 'none'; myHand = yourHand; boardState = []; scores = s; currentTurn = startingSeat; msgEl.innerHTML = ''; handSizes = { 0: 7, 1: 7, 2: 7, 3: 7 }; cleanupDrag(); renderScores(); renderBoard(); renderHand(); renderOpponents(); setStatus(currentTurn === mySeat ? 'Your turn!' : `Waiting for seat ${currentTurn}`); });
