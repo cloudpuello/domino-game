@@ -18,6 +18,7 @@
             --border-color: #cccccc;
             --accent-color: #ffc107;
             --error-color: #d9534f;
+            --drop-hover-color: #00bfa5; /* Color for valid drop zones */
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -29,6 +30,7 @@
             align-items: center;
             min-height: 100vh;
             padding: 1rem;
+            overflow: hidden; /* Prevent scrollbars during drag */
         }
 
         /* --- Main Layout --- */
@@ -53,6 +55,7 @@
             overflow-y: auto;
         }
         .game-table {
+            position: relative; 
             display: grid;
             grid-template-columns: 150px 1fr 150px;
             grid-template-rows: 100px 1fr 150px;
@@ -78,7 +81,7 @@
         #topPlayer    { grid-area: top-player; }
         #leftPlayer   { grid-area: left-player; align-self: center; }
         #rightPlayer  { grid-area: right-player; align-self: center; }
-        #hand         { grid-area: player-hand; }
+        #hand         { grid-area: player-hand; display: flex; align-items: center; justify-content: center; gap: 10px; }
         #board {
             grid-area: board;
             display: flex;
@@ -105,38 +108,38 @@
             border-radius: 5px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.15);
             transition: all 0.2s ease-in-out;
-            cursor: pointer;
+            cursor: grab; /* MODIFIED - Indicates tiles are draggable */
         }
         .tile.disabled { opacity: 0.6; cursor: default; box-shadow: none; }
-        .tile.your-turn {
-            border-color: var(--accent-color);
-            box-shadow: 0 0 15px var(--accent-color);
-            transform: translateY(-5px);
-        }
-        .tile.your-turn:hover { background-color: #fffde7; }
+        .tile.your-turn:hover { transform: translateY(-5px); }
+        .dummy-tile { background: #555; border: 1px solid #333; width: 20px; height: 30px; border-radius: 3px; box-shadow: 1px 1px 3px rgba(0,0,0,0.4); }
 
-        .dummy-tile {
-            background: #555;
-            border: 1px solid #333;
-            width: 20px;
-            height: 30px;
-            border-radius: 3px;
-            box-shadow: 1px 1px 3px rgba(0,0,0,0.4);
+        /* --- NEW STYLES FOR DRAG & DROP --- */
+        .tile.dragging {
+            position: fixed; /* Allow it to move anywhere on screen */
+            z-index: 1000;   /* Appear above all other elements */
+            cursor: grabbing;
+            pointer-events: none; /* Let mouse events pass through to elements underneath */
+            opacity: 0.95;
+            transform: scale(1.1); /* Make it slightly larger when grabbed */
+        }
+        .drop-target {
+            transition: box-shadow 0.2s ease-in-out;
+        }
+        .drop-target.drop-hover {
+            box-shadow: 0 0 20px 5px var(--drop-hover-color);
         }
         
-        /* --- Score Display Styling --- */
+        /* --- Score Display, Turn Indicator, and Pass Button styles remain the same --- */
         .score-display { display: flex; justify-content: space-around; gap: 1rem; text-align: center; }
         .score-box { background: #e9e9e9; padding: 0.5rem; border-radius: 6px; width: 100%; border-bottom: 4px solid #ccc; }
         .score-box span { font-size: 0.8rem; display: block; color: #666; font-weight: 600; }
         .score-box strong { font-size: 1.8rem; line-height: 1.1; display: block; color: var(--text-dark); }
         .your-team-color { border-color: #4CAF50; }
         .opponent-team-color { border-color: #F44336; }
-
-        /* --- THIS STYLE WAS ADDED FOR THE TURN INDICATOR --- */
-        .active-turn-indicator {
-            border-radius: 12px;
-            box-shadow: 0 0 20px 5px var(--accent-color);
-        }
+        .active-turn-indicator { border-radius: 12px; box-shadow: 0 0 20px 5px var(--accent-color); }
+        #pass-button { background-color: var(--accent-color); border: none; border-radius: 50%; width: 70px; height: 70px; color: var(--text-dark); font-size: 2.5rem; line-height: 1; display: flex; justify-content: center; align-items: center; position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3); transition: all 0.2s ease; }
+        #pass-button:hover { background-color: #ffD700; box-shadow: 0 6px 15px rgba(0,0,0,0.35); transform: translateX(-50%) scale(1.05); }
 
     </style>
 </head>
@@ -183,7 +186,9 @@
             <div id="leftPlayer" class="player-area"></div>
             <div id="board"></div>
             <div id="rightPlayer" class="player-area"></div>
-            <div id="hand" class="player-area"></div>
+            <div id="hand" class="player-area">
+                </div>
+            <button id="pass-button" style="display: none;">✋</button>
         </div>
     </div>
     <script src="/socket.io/socket.io.js"></script>

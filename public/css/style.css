@@ -43,6 +43,7 @@ body {
     overflow-y: auto;
 }
 .game-table {
+    position: relative; /* ADDED - Required for button positioning */
     display: grid;
     grid-template-columns: 150px 1fr 150px;
     grid-template-rows: 100px 1fr 150px;
@@ -68,7 +69,14 @@ body {
 #topPlayer { grid-area: top-player; }
 #leftPlayer { grid-area: left-player; align-self: center; }
 #rightPlayer { grid-area: right-player; align-self: center; }
-#hand { grid-area: player-hand; }
+#hand {
+    grid-area: player-hand;
+    /* ADDED - For better tile alignment */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
 #board {
     grid-area: board;
     display: flex;
@@ -125,4 +133,41 @@ body {
 .active-turn-indicator {
     border-radius: 12px;
     box-shadow: 0 0 20px 5px var(--accent-color);
+}
+
+/* --- ADDED - Pass Button Icon --- */
+#pass-button {
+    /* Reset and Shape */
+    background-color: var(--accent-color);
+    border: none;
+    border-radius: 50%; /* Makes it a circle */
+    width: 70px;
+    height: 70px;
+    
+    /* Content (Emoji) */
+    color: var(--text-dark);
+    font-size: 2.5rem; /* Make the hand emoji bigger */
+    line-height: 1;
+    
+    /* Centering */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    
+    /* Positioning */
+    position: absolute;
+    bottom: 40px; 
+    left: 50%;
+    transform: translateX(-50%);
+    
+    /* Effects */
+    cursor: pointer;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    transition: all 0.2s ease;
+}
+
+#pass-button:hover {
+    background-color: #ffD700; /* Lighter yellow */
+    box-shadow: 0 6px 15px rgba(0,0,0,0.35);
+    transform: translateX(-50%) scale(1.05);
 }

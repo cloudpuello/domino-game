@@ -1,35 +1,46 @@
 /* =========================================================================
-   client.js — (All Features & Fixes Included)
+   client.js — (Drag & Drop Update)
    ========================================================================= */
 
 // ── Socket + basic state ────────────────────────────────────────────────
 const socket = io();
 const playerName = prompt('Enter your name:') || 'Anonymous';
 
-let roomId        = null;
-let mySeat        = null;
-let currentTurn   = null;
-let myHand        = [];
-let boardState    = [];
-let scores        = [0, 0];
-let seatMap       = {};
-let handSizes     = {};
+let roomId = null;
+let mySeat = null;
+let currentTurn = null;
+let myHand = [];
+let boardState = [];
+let scores = [0, 0];
+let seatMap = {};
+let handSizes = {};
+
+// --- NEW: State for tracking the tile being dragged ---
+let dragged = {
+    element: null,      // The HTML element being dragged (the clone)
+    originalTile: null, // The original element in the hand
+    tileData: null,     // The tile data e.g., [6,5]
+    isDragging: false,
+    hoveredSide: null   // Will be 'left' or 'right' if hovering a valid spot
+};
 
 // ── DOM handles ─────────────────────────────────────────────────────────
-const statusEl         = document.getElementById('status');
-const boardEl          = document.getElementById('board');
-const handEl           = document.getElementById('hand');
-const lobbyListEl      = document.getElementById('lobbyList');
+const statusEl = document.getElementById('status');
+const boardEl = document.getElementById('board');
+const handEl = document.getElementById('hand');
+const lobbyListEl = document.getElementById('lobbyList');
 const lobbyContainerEl = document.getElementById('lobbyContainer');
-const playerInfoEl     = document.getElementById('playerInfo');
-const errorsEl         = document.getElementById('errors');
-const msgEl            = document.getElementById('messages');
-const pipEl            = document.getElementById('pipCounts');
-const topEl            = document.getElementById('topPlayer');
-const leftEl           = document.getElementById('leftPlayer');
-const rightEl          = document.getElementById('rightPlayer');
-const team0ScoreEl     = document.getElementById('team0-score');
-const team1ScoreEl     = document.getElementById('team1-score');
+const playerInfoEl = document.getElementById('playerInfo');
+const errorsEl = document.getElementById('errors');
+const msgEl = document.getElementById('messages');
+const pipEl = document.getElementById('pipCounts');
+const topEl = document.getElementById('topPlayer');
+const leftEl = document.getElementById('leftPlayer');
+const rightEl = document.getElementById('rightPlayer');
+const team0ScoreEl = document.getElementById('team0-score');
+const team1ScoreEl = document.getElementById('team1-score');
+const passButton = document.getElementById('pass-button');
+
 
 // Check if we are reconnecting to a game stored in the session
 const reconnectData = {
@@ -42,51 +53,70 @@ socket.emit('findRoom', { playerName, ...reconnectData });
 /* ── Helpers ──────────────────────────────────────────────────────────── */
 const setStatus = txt => (statusEl.textContent = txt);
 const showError = txt => {
-  errorsEl.textContent = txt;
-  setTimeout(() => (errorsEl.textContent = ''), 4000);
+    errorsEl.textContent = txt;
+    setTimeout(() => (errorsEl.textContent = ''), 4000);
 };
 const addMsg = txt => {
-  const p = document.createElement('div');
-  p.textContent = txt;
-  msgEl.prepend(p);
+    const p = document.createElement('div');
+    p.textContent = txt;
+    msgEl.prepend(p);
 };
 
 function renderLobby(players) {
-  lobbyListEl.innerHTML = '';
-  players.forEach(p => {
-    const li = document.createElement('li');
-    li.textContent = `Seat ${p.seat}: ${p.name}`;
-    lobbyListEl.appendChild(li);
-  });
+    lobbyListEl.innerHTML = '';
+    players.forEach(p => {
+        const li = document.createElement('li');
+        li.textContent = `Seat ${p.seat}: ${p.name}`;
+        lobbyListEl.appendChild(li);
+    });
 }
 
+// --- MODIFIED: `renderBoard` now identifies drop targets ---
 function renderBoard() {
-  boardEl.innerHTML = '';
-  boardState.forEach(t => {
-    const d = document.createElement('div');
-    d.className = 'tile disabled';
-    d.textContent = `${t[0]}|${t[1]}`;
-    boardEl.appendChild(d);
-  });
+    boardEl.innerHTML = '';
+    boardState.forEach(t => {
+        const d = document.createElement('div');
+        d.className = 'tile disabled';
+        d.textContent = `${t[0]}|${t[1]}`;
+        boardEl.appendChild(d);
+    });
+
+    // After rendering, mark the ends of the board as drop targets
+    if (boardEl.children.length > 0) {
+        boardEl.firstChild.classList.add('drop-target');
+        boardEl.firstChild.dataset.side = 'left';
+
+        // Only add to last child if there is more than one tile
+        if (boardEl.children.length > 1) {
+            boardEl.lastChild.classList.add('drop-target');
+            boardEl.lastChild.dataset.side = 'right';
+        }
+    }
 }
 
+// --- MODIFIED: `renderHand` now sets up dragging instead of clicking ---
 function renderHand() {
-  handEl.innerHTML = '';
-  myHand.forEach((t, i) => {
-    const d = document.createElement('div');
-    d.className = 'tile' + (currentTurn === mySeat ? ' your-turn' : ' disabled');
-    d.textContent = `${t[0]}|${t[1]}`;
-    if (currentTurn === mySeat) d.onclick = () => playTile(i);
-    handEl.appendChild(d);
-  });
+    handEl.innerHTML = '';
+    myHand.forEach(tileData => {
+        const d = document.createElement('div');
+        const canPlay = currentTurn === mySeat;
+        d.className = 'tile' + (canPlay ? '' : ' disabled');
+        d.textContent = `${tileData[0]}|${tileData[1]}`;
+
+        if (canPlay) {
+            // Use `mousedown` to start the drag process
+            d.onmousedown = (event) => handleTileMouseDown(event, tileData, d);
+        }
+        handEl.appendChild(d);
+    });
 }
 
 function seatPos(seat) {
-  if (seat === mySeat) return 'self';
-  const diff = (seat - mySeat + 4) % 4;
-  if (diff === 1) return 'right';
-  if (diff === 2) return 'top';
-  return 'left';
+    if (seat === mySeat) return 'self';
+    const diff = (seat - mySeat + 4) % 4;
+    if (diff === 1) return 'right';
+    if (diff === 2) return 'top';
+    return 'left';
 }
 
 function renderOpponents() {
@@ -99,12 +129,12 @@ function renderOpponents() {
 
         const pos = seatPos(seat);
         const areaEl = playerAreas[pos];
-        
+
         if (areaEl) {
             const nameEl = document.createElement('div');
             nameEl.textContent = `${info.name} (Seat ${seat})`;
             areaEl.appendChild(nameEl);
-            
+
             const handDisplayEl = document.createElement('div');
             handDisplayEl.className = 'player-area-hand-display';
             const count = handSizes[seat] || 0;
@@ -124,21 +154,108 @@ function renderScores() {
 }
 
 function renderPips(pipCounts) {
-  pipEl.textContent = pipCounts
-    ? Object.entries(pipCounts).map(([p, c]) => `${p}:${c}`).join(' | ')
-    : '';
+    pipEl.textContent = pipCounts
+        ? Object.entries(pipCounts).map(([p, c]) => `${p}:${c}`).join(' | ')
+        : '';
 }
 
-/* ── Moves ────────────────────────────────────────────────────────────── */
-function playTile(idx) {
-    if (currentTurn !== mySeat) return;
-    const tile = myHand[idx];
-    const userInput = prompt('Side? left / right (blank = auto)');
-    if (userInput === null) return;
-    const cleanInput = userInput.trim().toLowerCase();
-    let side = (cleanInput === 'left' || cleanInput === 'right') ? cleanInput : null;
-    socket.emit('playTile', { roomId, seat: mySeat, tile, side });
+
+/* ─── NEW: Drag and Drop Handlers ──────────────────────────────────────── */
+
+function handleTileMouseDown(event, tileData, tileElement) {
+    if (event.button !== 0) return; // Only react to left-clicks
+
+    event.preventDefault();
+
+    dragged.isDragging = true;
+    dragged.tileData = tileData;
+    dragged.originalTile = tileElement;
+
+    // Create a clone of the tile to drag around
+    dragged.element = tileElement.cloneNode(true);
+    dragged.element.classList.add('dragging');
+    document.body.appendChild(dragged.element);
+
+    // Hide the original tile in the hand
+    tileElement.style.visibility = 'hidden';
+
+    // Position the dragged element at the mouse cursor
+    moveDraggedElement(event.clientX, event.clientY);
+
+    // Add listeners to the whole document to track mouse movement
+    document.addEventListener('mousemove', handleDocumentMouseMove);
+    document.addEventListener('mouseup', handleDocumentMouseUp);
 }
+
+function handleDocumentMouseMove(event) {
+    if (!dragged.isDragging) return;
+
+    // Move the tile clone with the cursor
+    moveDraggedElement(event.clientX, event.clientY);
+
+    // Check if we are hovering over a valid drop zone
+    const dropTargets = document.querySelectorAll('.drop-target');
+    let onTarget = false;
+
+    dropTargets.forEach(target => {
+        const rect = target.getBoundingClientRect();
+        if (event.clientX > rect.left && event.clientX < rect.right &&
+            event.clientY > rect.top && event.clientY < rect.bottom) {
+            target.classList.add('drop-hover');
+            dragged.hoveredSide = target.dataset.side;
+            onTarget = true;
+        } else {
+            target.classList.remove('drop-hover');
+        }
+    });
+
+    if (!onTarget) {
+        dragged.hoveredSide = null;
+    }
+}
+
+function handleDocumentMouseUp(event) {
+    if (!dragged.isDragging) return;
+
+    // If we dropped on a valid, hovered side, play the tile
+    if (dragged.hoveredSide) {
+        socket.emit('playTile', {
+            roomId,
+            seat: mySeat,
+            tile: dragged.tileData,
+            side: dragged.hoveredSide
+        });
+    } else {
+        // If the drop was invalid, make the original tile visible again
+        dragged.originalTile.style.visibility = 'visible';
+    }
+
+    // Cleanup: remove the dragged clone and all event listeners
+    document.body.removeChild(dragged.element);
+    document.querySelectorAll('.drop-target').forEach(t => t.classList.remove('drop-hover'));
+    document.removeEventListener('mousemove', handleDocumentMouseMove);
+    document.removeEventListener('mouseup', handleDocumentMouseUp);
+
+    // Reset the dragged state object
+    dragged = { element: null, originalTile: null, tileData: null, isDragging: false, hoveredSide: null };
+}
+
+function moveDraggedElement(x, y) {
+    if (!dragged.element) return;
+    // Center the tile on the cursor
+    dragged.element.style.left = `${x - (dragged.element.offsetWidth / 2)}px`;
+    dragged.element.style.top = `${y - (dragged.element.offsetHeight / 2)}px`;
+}
+
+
+/* ─── REMOVED: Old playTile and Pass Button Logic ──────────────────────── */
+// The old `playTile` function with the prompt is no longer needed.
+// The pass button listener is still good.
+passButton.addEventListener('click', () => {
+    socket.emit('passTurn', { roomId, seat: mySeat });
+    passButton.style.display = 'none';
+});
+
 
 /* ── Socket events ────────────────────────────────────────────────────── */
 socket.on('roomJoined', ({ roomId: id, seat }) => {
@@ -150,56 +267,55 @@ socket.on('roomJoined', ({ roomId: id, seat }) => {
 });
 
 socket.on('lobbyUpdate', ({ players }) => {
-  lobbyContainerEl.style.display = 'block';
-  seatMap = Object.fromEntries(players.map(p => [p.seat, p]));
-  renderLobby(players);
+    lobbyContainerEl.style.display = 'block';
+    seatMap = Object.fromEntries(players.map(p => [p.seat, p]));
+    renderLobby(players);
 });
 
 socket.on('roundStart', ({ yourHand, startingSeat, scores: s }) => {
-  lobbyContainerEl.style.display = 'none';
-  myHand = yourHand;
-  boardState = [];
-  scores = s;
-  currentTurn = startingSeat;
-  msgEl.innerHTML = '';
-  handSizes = { 0: 7, 1: 7, 2: 7, 3: 7 };
-  renderScores();
-  renderBoard();
-  renderHand();
-  renderOpponents();
-  setStatus(currentTurn === mySeat ? 'Your turn!' : `Waiting for seat ${currentTurn}`);
+    lobbyContainerEl.style.display = 'none';
+    myHand = yourHand;
+    boardState = [];
+    scores = s;
+    currentTurn = startingSeat;
+    msgEl.innerHTML = '';
+    handSizes = { 0: 7, 1: 7, 2: 7, 3: 7 };
+    renderScores();
+    renderBoard();
+    renderHand();
+    renderOpponents();
+    setStatus(currentTurn === mySeat ? 'Your turn!' : `Waiting for seat ${currentTurn}`);
 });
 
 socket.on('updateHand', hand => {
-  myHand = hand;
-  handSizes[mySeat] = hand.length;
-  renderHand();
-  renderOpponents();
+    myHand = hand;
+    handSizes[mySeat] = hand.length;
+    renderHand();
+    renderOpponents();
 });
 
 socket.on('broadcastMove', ({ seat, tile, board, pipCounts }) => {
-  boardState = board;
-  if (seat !== mySeat) {
-      handSizes[seat]--;
-  }
-  renderBoard();
-  renderPips(pipCounts);
-  renderOpponents();
-  addMsg(`Seat ${seat} played ${tile[0]}|${tile[1]}.`);
+    boardState = board;
+    if (seat !== mySeat) {
+        handSizes[seat]--;
+    }
+    renderBoard();
+    renderPips(pipCounts);
+    renderOpponents();
+    addMsg(`Seat ${seat} played ${tile[0]}|${tile[1]}.`);
 });
 
-// --- THIS FUNCTION IS UPDATED WITH THE VISUAL INDICATOR LOGIC ---
 socket.on('turnChanged', turn => {
     currentTurn = turn;
-    setStatus(turn === mySeat ? 'Your turn!' : `Waiting for seat ${turn}`);
-    renderHand();
+    setStatus(turn === mySeat ? "It's your turn!" : `Waiting for seat ${turn}`);
 
-    // Remove indicator from all player areas first
+    passButton.style.display = 'none';
+    renderHand(); // Re-render to enable/disable dragging
+
     [topEl, leftEl, rightEl, handEl].forEach(el => {
         el.classList.remove('active-turn-indicator');
     });
 
-    // Add indicator to the correct player area
     const pos = seatPos(turn);
     if (pos === 'top') topEl.classList.add('active-turn-indicator');
     else if (pos === 'left') leftEl.classList.add('active-turn-indicator');
@@ -207,30 +323,35 @@ socket.on('turnChanged', turn => {
     else if (pos === 'self') handEl.classList.add('active-turn-indicator');
 });
 
-socket.on('playerPassed', ({ seat }) => {
-  addMsg(`Seat ${seat} passed.`);
+socket.on('mustPass', () => {
+    if (currentTurn === mySeat) {
+        passButton.style.display = 'block';
+    }
 });
 
-socket.on('roundEnded', ({ winner, reason, points, scores: s, board }) => {
-  boardState = board;
-  scores = s;
-  renderScores();
-  renderBoard();
-  let msg = `Seat ${winner} wins (${reason}) +${points} pts.`;
-  setStatus(msg);
-  addMsg(msg);
+socket.on('playerPassed', ({ seat }) => {
+    addMsg(`Seat ${seat} passed.`);
+});
+
+socket.on('roundEnded', ({ winner, reason, points, scores: s }) => {
+    scores = s;
+    renderScores();
+    let msg = `Seat ${winner} wins (${reason}) +${points} pts.`;
+    setStatus(msg);
+    addMsg(msg);
 });
 
 socket.on('gameOver', ({ winningTeam, scores: s }) => {
-  sessionStorage.removeItem('domino_roomId');
-  sessionStorage.removeItem('domino_mySeat');
-  alert(`Game over! Team ${winningTeam} wins.\nScores: ${s.join(' / ')}`);
-  setStatus('Game over.');
+    sessionStorage.removeItem('domino_roomId');
+    sessionStorage.removeItem('domino_mySeat');
+    alert(`Game over! Team ${winningTeam} wins.\nScores: ${s.join(' / ')}`);
+    setStatus('Game over.');
 });
 
 socket.on('reconnectSuccess', ({ roomState }) => {
-    // This event needs to be fully implemented on the server
     console.log('Successfully reconnected!');
+    // You would add logic here to restore the full game state
+    // For now, it just logs a message.
 });
 
 socket.on('errorMessage', showError);
