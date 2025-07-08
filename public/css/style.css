@@ -63,8 +63,12 @@ body {
 .tile.double { transform: rotate(90deg); }
 .tile.disabled { opacity: 0.6; cursor: default; box-shadow: none; }
 .tile.ghost { opacity: 0.2; }
-.dummy-tile { background: #555; border: 1px solid #333; width: 20px; height: 30px; border-radius: 3px; box-shadow: 1px 1px 3px rgba(0,0,0,0.4); }
 
+.dummy-tile { background: #555; border: 1px solid #333; width: 20px; height: 30px; border-radius: 3px; box-shadow: 1px 1px 3px rgba(0,0,0,0.4); }
+.tile.playable:hover {
+    border-color: var(--accent-color);
+    box-shadow: 0 0 10px var(--accent-color);
+}
 .tile-placeholder, .play-placeholder {
     flex-shrink: 0; width: 70px; height: 55px; border: 3px dashed var(--accent-color);
     border-radius: 5px; background: rgba(255, 193, 7, 0.2); cursor: pointer;

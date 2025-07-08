@@ -1,5 +1,5 @@
 /* =========================================================================
-   client.js — (Center Opening Tile Fix)
+   client.js — (Smarter Highlighting & Drop Zone Fix)
    ========================================================================= */
 
 const socket = io();
@@ -35,53 +35,112 @@ const showError = txt => { errorsEl.textContent = txt; setTimeout(() => (errorsE
 const addMsg = txt => { const p = document.createElement('div'); p.textContent = txt; msgEl.prepend(p); };
 function renderLobby(players) { lobbyListEl.innerHTML = ''; players.forEach(p => { const li = document.createElement('li'); li.textContent = `Seat ${p.seat}: ${p.name}`; lobbyListEl.appendChild(li); }); }
 
-// --- THIS FUNCTION IS UPDATED ---
 function renderBoard() {
     boardEl.innerHTML = '';
-
-    // Add/remove a class for centering the first tile
-    if (boardState.length <= 1) {
-        boardEl.classList.add('board-center');
-    } else {
-        boardEl.classList.remove('board-center');
-    }
-
     if (boardState.length === 0) {
         renderPlaceholder();
     } else {
         boardState.forEach(t => {
-            const tileContainer = document.createElement('div');
-            tileContainer.className = 'tile-container';
             const d = document.createElement('div');
             d.className = 'tile disabled';
             if (t[0] === t[1]) {
                 d.classList.add('double');
-                tileContainer.classList.add('double-container');
             }
             d.innerHTML = `<span>${t[0]}</span><span>${t[1]}</span>`;
-            tileContainer.appendChild(d);
-            boardEl.appendChild(tileContainer);
+            boardEl.appendChild(d);
         });
     }
 }
 
-function renderPlaceholder() { const placeholder = document.createElement('div'); placeholder.className = 'tile-placeholder'; const isFirstGameRound = scores[0] === 0 && scores[1] === 0; placeholder.textContent = isFirstGameRound ? '6|6' : 'Play Tile'; boardEl.appendChild(placeholder); }
-function renderHand() { handEl.innerHTML = ''; myHand.forEach((tileData) => { const d = document.createElement('div'); d.className = 'tile'; if (currentTurn !== mySeat) d.classList.add('disabled'); d.innerHTML = `<span>${tileData[0]}</span><span>${tileData[1]}</span>`; if (currentTurn === mySeat) { d.addEventListener('mousedown', (e) => handleDragStart(e, tileData, d)); d.addEventListener('touchstart', (e) => handleDragStart(e, tileData, d), { passive: false }); d.addEventListener('dragstart', (e) => e.preventDefault()); } handEl.appendChild(d); }); }
+function renderPlaceholder() {
+    const placeholder = document.createElement('div');
+    placeholder.className = 'tile-placeholder';
+    const isFirstGameRound = scores[0] === 0 && scores[1] === 0;
+    placeholder.textContent = isFirstGameRound ? '6|6' : 'Play Tile';
+    if (isFirstGameRound) {
+        placeholder.classList.add('drop-target');
+    }
+    boardEl.appendChild(placeholder);
+}
+
+// --- UPDATED: To add .playable class based on game state ---
+function renderHand() {
+    handEl.innerHTML = '';
+    const boardEnds = getBoardEnds();
+
+    myHand.forEach((tileData) => {
+        const d = document.createElement('div');
+        d.className = 'tile';
+        d.innerHTML = `<span>${tileData[0]}</span><span>${tileData[1]}</span>`;
+        
+        const isPlayable = isTilePlayable(tileData, boardEnds);
+
+        if (currentTurn === mySeat) {
+            if (isPlayable) {
+                d.classList.add('playable'); // Highlight playable tiles
+                d.addEventListener('mousedown', (e) => handleDragStart(e, tileData, d));
+                d.addEventListener('touchstart', (e) => handleDragStart(e, tileData, d), { passive: false });
+                d.addEventListener('dragstart', (e) => e.preventDefault());
+            } else {
+                d.classList.add('disabled');
+            }
+        } else {
+            d.classList.add('disabled');
+        }
+        handEl.appendChild(d);
+    });
+}
+
 function seatPos(seat) { if (seat === mySeat) return 'self'; const diff = (seat - mySeat + 4) % 4; if (diff === 1) return 'right'; if (diff === 2) return 'top'; return 'left'; }
 function renderOpponents() { const playerAreas = { top: topEl, left: leftEl, right: rightEl }; Object.values(playerAreas).forEach(el => el.innerHTML = ''); Object.entries(seatMap).forEach(([s, info]) => { const seat = +s; if (seat === mySeat) return; const pos = seatPos(seat); const areaEl = playerAreas[pos]; if (areaEl) { const nameEl = document.createElement('div'); nameEl.textContent = `${info.name} (Seat ${seat})`; areaEl.appendChild(nameEl); const handDisplayEl = document.createElement('div'); handDisplayEl.className = 'player-area-hand-display'; const count = handSizes[seat] || 0; for (let i = 0; i < count; i++) { const dummy = document.createElement('div'); dummy.className = 'dummy-tile'; handDisplayEl.appendChild(dummy); } areaEl.appendChild(handDisplayEl); } }); }
 function renderScores() { team0ScoreEl.textContent = scores[0]; team1ScoreEl.textContent = scores[1]; }
 function renderPips(pipCounts) { pipEl.textContent = pipCounts ? Object.entries(pipCounts).map(([p, c]) => `${p}:${c}`).join(' | ') : ''; }
 
 /* ─── Drag and Drop Logic ────────────────────── */
-function handleDragStart(e, tileData, tileElement) { if (e.type === 'touchstart') e.preventDefault(); if (dragged.isDragging) return; dragged = { tileData, originalTile: tileElement, isDragging: true, hoveredSide: null }; dragged.element = tileElement.cloneNode(true); dragged.element.classList.add('dragging'); document.body.appendChild(dragged.element); tileElement.classList.add('ghost'); showPlayablePlaceholders(tileData); const pos = getEventPosition(e); moveDraggedElement(pos.x, pos.y); document.addEventListener('mousemove', handleDragMove); document.addEventListener('mouseup', handleDragEnd); document.addEventListener('touchmove', handleDragMove, { passive: false }); document.addEventListener('touchend', handleDragEnd); }
-function handleDragMove(e) { if (!dragged.isDragging) return; e.preventDefault(); const pos = getEventPosition(e); moveDraggedElement(pos.x, pos.y); let onTarget = false; document.querySelectorAll('.play-placeholder').forEach(target => { const rect = target.getBoundingClientRect(); if (pos.x > rect.left && pos.x < rect.right && pos.y > rect.top && pos.y < rect.bottom) { onTarget = true; dragged.hoveredSide = target.dataset.side; target.classList.add('drop-hover'); } else { target.classList.remove('drop-hover'); } }); if (!onTarget) dragged.hoveredSide = null; }
+function handleDragStart(e, tileData, tileElement) { if (e.type === 'touchstart') e.preventDefault(); if (dragged.isDragging) return; dragged = { tileData, originalTile: tileElement, isDragging: true, hoveredSide: null }; dragged.element = tileElement.cloneNode(true); dragged.element.classList.add('dragging'); document.body.appendChild(dragged.element); tileElement.classList.add('ghost'); highlightPlayableEnds(tileData); const pos = getEventPosition(e); moveDraggedElement(pos.x, pos.y); document.addEventListener('mousemove', handleDragMove); document.addEventListener('mouseup', handleDragEnd); document.addEventListener('touchmove', handleDragMove, { passive: false }); document.addEventListener('touchend', handleDragEnd); }
+function handleDragMove(e) { if (!dragged.isDragging) return; e.preventDefault(); const pos = getEventPosition(e); moveDraggedElement(pos.x, pos.y); let onTarget = false; document.querySelectorAll('.drop-target').forEach(target => { const rect = target.getBoundingClientRect(); if (pos.x > rect.left && pos.x < rect.right && pos.y > rect.top && pos.y < rect.bottom) { onTarget = true; dragged.hoveredSide = target.dataset.side; target.classList.add('drop-hover'); } else { target.classList.remove('drop-hover'); } }); if (!onTarget) dragged.hoveredSide = null; }
 function handleDragEnd() { if (!dragged.isDragging) return; const { originalTile, tileData, hoveredSide } = dragged; if (hoveredSide) { socket.emit('playTile', { roomId, seat: mySeat, tile: tileData, side: hoveredSide }); } else { originalTile.classList.remove('ghost'); } cleanupDrag(); }
-function cleanupDrag() { if (dragged.element) dragged.element.remove(); document.querySelectorAll('.play-placeholder').forEach(el => el.remove()); document.removeEventListener('mousemove', handleDragMove); document.removeEventListener('mouseup', handleDragEnd); document.removeEventListener('touchmove', handleDragMove); document.removeEventListener('touchend', handleDragEnd); dragged = { element: null, originalTile: null, tileData: null, isDragging: false, hoveredSide: null }; }
-function showPlayablePlaceholders(tileData) { if (boardState.length === 0) return; const boardEnds = getBoardEnds(); if (!boardEnds) return; const [p1, p2] = tileData; if (p1 === boardEnds.leftPip || p2 === boardEnds.leftPip) { createPlaceholder(boardEnds.leftTileContainer, 'left', boardEnds.isLeftDouble); } if (boardEnds.rightTileContainer !== boardEnds.leftTileContainer) { if (p1 === boardEnds.rightPip || p2 === boardEnds.rightPip) { createPlaceholder(boardEnds.rightTileContainer, 'right', boardEnds.isRightDouble); } } }
-function createPlaceholder(container, side, isDouble) { if (isDouble) { const placeholderTop = document.createElement('div'); placeholderTop.className = 'play-placeholder double-placeholder-top'; placeholderTop.dataset.side = side; container.appendChild(placeholderTop); const placeholderBottom = document.createElement('div'); placeholderBottom.className = 'play-placeholder double-placeholder-bottom'; placeholderBottom.dataset.side = side; container.appendChild(placeholderBottom); } else { const placeholder = document.createElement('div'); placeholder.className = 'play-placeholder'; placeholder.dataset.side = side; if (side === 'left') { container.before(placeholder); } else { container.after(placeholder); } } }
+
+function cleanupDrag() {
+    if (dragged.element) dragged.element.remove();
+    document.querySelectorAll('.drop-target').forEach(el => el.classList.remove('drop-target', 'drop-hover'));
+    if (dragged.originalTile) dragged.originalTile.classList.remove('ghost');
+    document.removeEventListener('mousemove', handleDragMove);
+    document.removeEventListener('mouseup', handleDragEnd);
+    document.removeEventListener('touchmove', handleDragMove);
+    document.removeEventListener('touchend', handleDragEnd);
+    dragged = { element: null, originalTile: null, tileData: null, isDragging: false, hoveredSide: null };
+}
+
+function highlightPlayableEnds(tileData) {
+    const boardEnds = getBoardEnds();
+    const [p1, p2] = tileData;
+    if (!boardEnds) { return; } // Let renderPlaceholder handle the first move target
+    if (p1 === boardEnds.leftPip || p2 === boardEnds.leftPip) {
+        boardEnds.leftTile.classList.add('drop-target');
+        boardEnds.leftTile.dataset.side = 'left';
+    }
+    if (boardEnds.rightTile !== boardEnds.leftTile) {
+        if (p1 === boardEnds.rightPip || p2 === boardEnds.rightPip) {
+            boardEnds.rightTile.classList.add('drop-target');
+            boardEnds.rightTile.dataset.side = 'right';
+        }
+    }
+}
+
+function isTilePlayable(tileData, boardEnds) {
+    const [p1, p2] = tileData;
+    const isFirstGameRound = scores[0] === 0 && scores[1] === 0;
+    if (isFirstGameRound && boardState.length === 0) {
+        return p1 === 6 && p2 === 6;
+    }
+    if (!boardEnds) return true;
+    return (p1 === boardEnds.leftPip || p2 === boardEnds.leftPip || p1 === boardEnds.rightPip || p2 === boardEnds.rightPip);
+}
+
 function moveDraggedElement(x, y) { if (!dragged.element) return; dragged.element.style.left = `${x}px`; dragged.element.style.top = `${y}px`; }
 function getEventPosition(e) { return e.touches ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : { x: e.clientX, y: e.clientY }; }
-function getBoardEnds() { if (boardState.length === 0) return null; const leftData = boardState[0]; const rightData = boardState[boardState.length - 1]; return { leftTileContainer: boardEl.firstChild, leftPip: leftData[0], isLeftDouble: leftData[0] === leftData[1], rightTileContainer: boardEl.lastChild, rightPip: rightData[1], isRightDouble: rightData[0] === rightData[1] }; }
+function getBoardEnds() { if (boardState.length === 0) return null; return { leftTile: boardEl.firstChild, leftPip: boardState[0][0], rightTile: boardEl.lastChild, rightPip: boardState[boardState.length - 1][1] }; }
 
 /* ─── Socket.IO Event Handlers ────────────────────── */
 socket.on('roomJoined', ({ roomId: id, seat }) => { roomId = id; mySeat = seat; sessionStorage.setItem('domino_roomId', roomId); sessionStorage.setItem('domino_mySeat', mySeat); playerInfoEl.textContent = `You are Seat ${seat} (Team ${seat % 2 === 0 ? '0&2' : '1&3'})`; });
