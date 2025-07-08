@@ -1,5 +1,5 @@
 /* =========================================================================
-   style.css — (Final Version with All Features)
+   style.css — (Complete Final Version)
    ========================================================================= */
 
 /* --- General Setup & Theming --- */
@@ -13,28 +13,104 @@
     --accent-color: #ffc107;
     --error-color: #d9534f;
 }
-* { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
-body {
-    font-family: 'Poppins', sans-serif; background-color: var(--table-bg);
-    color: var(--text-dark); display: flex; justify-content: center;
-    align-items: center; min-height: 100vh; padding: 1rem;
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    user-select: none;
 }
-.game-container { display: grid; grid-template-columns: 250px 1fr; grid-template-rows: 1fr; gap: 1.5rem; width: 100%; max-width: 1400px; height: 90vh; max-height: 900px; }
-.info-panel { background-color: var(--panel-bg); border-radius: 8px; padding: 1rem; display: flex; flex-direction: column; gap: 1rem; box-shadow: 0 4px 12px rgba(0,0,0,0.2); overflow-y: auto; }
-.game-table { display: grid; grid-template-columns: 150px 1fr 150px; grid-template-rows: 100px 1fr 150px; grid-template-areas: "top-player top-player top-player" "left-player board right-player" "player-hand player-hand player-hand"; gap: 1rem; }
-.info-section { border-top: 1px solid var(--border-color); padding-top: 1rem; }
+
+body {
+    font-family: 'Poppins', sans-serif;
+    background-color: var(--table-bg);
+    color: var(--text-dark);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: 1rem;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Layout                                                                     */
+/* -------------------------------------------------------------------------- */
+
+.game-container {
+    display: grid;
+    grid-template-columns: 250px 1fr;
+    grid-template-rows: 1fr;
+    gap: 1.5rem;
+    width: 100%;
+    max-width: 1400px;
+    height: 90vh;
+    max-height: 900px;
+}
+
+.info-panel {
+    background-color: var(--panel-bg);
+    border-radius: 8px;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    overflow-y: auto;
+}
+
+.game-table {
+    display: grid;
+    grid-template-columns: 150px 1fr 150px;
+    grid-template-rows: 100px 1fr 150px;
+    grid-template-areas:
+        "top-player   top-player   top-player"
+        "left-player  board        right-player"
+        "player-hand  player-hand  player-hand";
+    gap: 1rem;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Info‑panel typography                                                      */
+/* -------------------------------------------------------------------------- */
+
+.info-section          { border-top: 1px solid var(--border-color); padding-top: 1rem; }
 .info-section:first-child { border-top: none; padding-top: 0; }
-.info-section h3 { margin-bottom: 0.5rem; font-size: 1.1rem; }
-#status { font-weight: 600; font-size: 1.2rem; }
-#errors { color: var(--error-color); font-weight: 600; min-height: 1.2em; }
-#messages { max-height: 200px; overflow-y: auto; font-size: 0.9rem; }
-#messages > div { padding: 2px 0; border-bottom: 1px solid #eee; }
-.player-area { color: var(--text-light); padding: 0.5rem; text-align: center; transition: box-shadow 0.3s ease; }
-.player-area-hand-display { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; margin-top: 8px; min-height: 32px; }
-#topPlayer { grid-area: top-player; }
-#leftPlayer { grid-area: left-player; align-self: center; }
+.info-section h3       { margin-bottom: 0.5rem; font-size: 1.1rem; }
+#status                { font-weight: 600; font-size: 1.2rem; }
+#errors                { color: var(--error-color); font-weight: 600; min-height: 1.2em; }
+#messages              { max-height: 200px; overflow-y: auto; font-size: 0.9rem; }
+#messages > div        { padding: 2px 0; border-bottom: 1px solid #eee; }
+
+/* -------------------------------------------------------------------------- */
+/* Player areas                                                               */
+/* -------------------------------------------------------------------------- */
+
+.player-area {
+    color: var(--text-light);
+    padding: 0.5rem;
+    text-align: center;
+    transition: box-shadow 0.3s ease;
+}
+
+.player-area:hover     { box-shadow: 0 0 8px rgba(0,0,0,0.25); }
+
+.player-area-hand-display {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    justify-content: center;
+    margin-top: 8px;
+    min-height: 32px;
+}
+
+#topPlayer   { grid-area: top-player; }
+#leftPlayer  { grid-area: left-player; align-self: center; }
 #rightPlayer { grid-area: right-player; align-self: center; }
-#hand { grid-area: player-hand; }
+#hand        { grid-area: player-hand; }
+
+/* -------------------------------------------------------------------------- */
+/* Board                                                                      */
+/* -------------------------------------------------------------------------- */
 
 #board {
     grid-area: board;
@@ -48,48 +124,160 @@ body {
     overflow-y: hidden;
 }
 
-/* NEW: This rule centers the board content only when this class is present */
-#board.board-center {
-    justify-content: center;
+#board.board-center { justify-content: center; }
+
+/* dark themed scrollbar */
+#board::-webkit-scrollbar        { height: 8px; }
+#board::-webkit-scrollbar-thumb  { background: #666; border-radius: 4px; }
+#board::-webkit-scrollbar-track  { background: transparent; }
+
+/* -------------------------------------------------------------------------- */
+/* Tiles                                                                      */
+/* -------------------------------------------------------------------------- */
+
+.tile {
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-around;
+    border: 1px solid #999;
+    background: var(--tile-bg);
+    color: var(--text-dark);
+    padding: 0.4rem;
+    font-weight: 600;
+    font-size: clamp(0.9rem, 3.5vw, 1.2rem);
+    width: clamp(48px, 13vw, 70px);
+    border-radius: 5px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+    cursor: grab;
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
 }
 
-.tile-container { position: relative; display: flex; justify-content: center; align-items: center; }
-.double-container { margin: 0 10px; }
+.tile > span            { border-left: 2px solid #ccc; padding-left: 0.4rem; margin-left: 0.4rem; }
+.tile > span:first-child{ border-left: none; padding-left: 0; margin-left: 0; }
+.tile.double            { transform: rotate(90deg); }
+.tile.disabled          { opacity: 0.6; cursor: default; box-shadow: none; }
+.tile.ghost             { opacity: 0.2; }
 
-/* --- Tile Styling --- */
-.tile { display: inline-flex; align-items: center; justify-content: space-around; border: 1px solid #999; background: var(--tile-bg); color: var(--text-dark); padding: 0.4rem; font-weight: 600; font-size: 1.2rem; width: 70px; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.15); cursor: grab; transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out; }
-.tile > span { border-left: 2px solid #ccc; padding-left: 0.4rem; margin-left: 0.4rem; }
-.tile > span:first-child { border-left: none; padding-left: 0; margin-left: 0; }
-.tile.double { transform: rotate(90deg); }
-.tile.disabled { opacity: 0.6; cursor: default; box-shadow: none; }
-.tile.ghost { opacity: 0.2; }
-
-.dummy-tile { background: #555; border: 1px solid #333; width: 20px; height: 30px; border-radius: 3px; box-shadow: 1px 1px 3px rgba(0,0,0,0.4); }
+/* Highlight playable tiles */
 .tile.playable:hover {
     border-color: var(--accent-color);
     box-shadow: 0 0 10px var(--accent-color);
 }
-.tile-placeholder, .play-placeholder {
-    flex-shrink: 0; width: 70px; height: 55px; border: 3px dashed var(--accent-color);
-    border-radius: 5px; background: rgba(255, 193, 7, 0.2); cursor: pointer;
-    transition: background-color 0.2s ease; display: flex; align-items: center;
-    justify-content: center; color: rgba(255, 255, 255, 0.8); font-weight: 600;
+
+/* -------------------------------------------------------------------------- */
+/* Placeholders & drop zones                                                  */
+/* -------------------------------------------------------------------------- */
+
+.tile-placeholder,
+.play-placeholder {
+    flex-shrink: 0;
+    width: 70px;
+    height: 55px;
+    border: 3px dashed var(--accent-color);
+    border-radius: 5px;
+    background: rgba(255,193,7,0.2);
+    cursor: pointer;
+    touch-action: none;
+    transition: background-color 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255,255,255,0.8);
+    font-weight: 600;
     font-size: 0.8rem;
 }
-.tile-placeholder::before, .play-placeholder::before { content: "DROP HERE"; }
-.play-placeholder.drop-hover { background: rgba(255, 193, 7, 0.4); border-style: solid; }
-.double-placeholder-top, .double-placeholder-bottom { position: absolute; left: 50%; transform: translateX(-50%) rotate(90deg); }
-.double-placeholder-top { top: -55px; }
-.double-placeholder-bottom { bottom: -55px; }
 
-/* --- Drag & Drop Styling --- */
-.tile.dragging { position: fixed; z-index: 1000; pointer-events: none; cursor: grabbing; transform: scale(1.1) translateY(-10px); box-shadow: 0 10px 20px rgba(0,0,0,0.25); }
+.tile-placeholder::before,
+.play-placeholder::before { content: "DROP HERE"; }
 
-/* --- Score Display & Turn Indicator Styling --- */
-.score-display { display: flex; justify-content: space-around; gap: 1rem; text-align: center; }
-.score-box { background: #e9e9e9; padding: 0.5rem; border-radius: 6px; width: 100%; border-bottom: 4px solid #ccc; }
-.score-box span { font-size: 0.8rem; display: block; color: #666; font-weight: 600; }
-.score-box strong { font-size: 1.8rem; line-height: 1.1; display: block; color: var(--text-dark); }
-.your-team-color { border-color: #4CAF50; }
+.tile-placeholder.drop-hover,
+.play-placeholder.drop-hover {
+    background: rgba(255,193,7,0.4);
+    border-style: solid;
+}
+
+/* Ring overlay on active drop‑targets */
+.drop-target {
+    position: relative;
+}
+
+.drop-target::after {
+    content: "";
+    position: absolute;
+    inset: -4px;
+    border: 2px dashed var(--accent-color);
+    border-radius: 8px;
+    opacity: 0.4;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+}
+
+.drop-hover::after { opacity: 1; }
+
+/* Dummy tiles for opponent count */
+.dummy-tile {
+    background: #555;
+    border: 1px solid #333;
+    width: 20px;
+    height: 30px;
+    border-radius: 3px;
+    box-shadow: 1px 1px 3px rgba(0,0,0,0.4);
+}
+
+/* Dragging visual */
+.tile.dragging {
+    position: fixed;
+    z-index: 1000;
+    pointer-events: none;
+    transform: scale(1.1) translateY(-10px);
+    box-shadow: 0 10px 20px rgba(0,0,0,0.25);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Score & turn indicators                                                    */
+/* -------------------------------------------------------------------------- */
+
+.score-display {
+    display: flex;
+    justify-content: space-around;
+    gap: 1rem;
+    text-align: center;
+}
+
+.score-box {
+    background: #e9e9e9;
+    padding: 0.5rem;
+    border-radius: 6px;
+    width: 100%;
+    border-bottom: 4px solid #ccc;
+}
+
+.score-box span {
+    font-size: 0.8rem;
+    color: #666;
+    font-weight: 600;
+    display: block;
+}
+
+.score-box strong {
+    font-size: 1.8rem;
+    line-height: 1.1;
+    display: block;
+    color: var(--text-dark);
+}
+
+.your-team-color     { border-color: #4CAF50; }
 .opponent-team-color { border-color: #F44336; }
-.active-turn-indicator { border-radius: 12px; box-shadow: 0 0 20px 5px var(--accent-color); }
+
+.active-turn-indicator {
+    border-radius: 12px;
+    box-shadow: 0 0 20px 5px var(--accent-color);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Accessibility — reduced motion                                             */
+/* -------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+    .tile.dragging { transition: none; transform: none; }
+}
