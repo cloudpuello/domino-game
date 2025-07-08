@@ -93,14 +93,20 @@ body {
     transform: scale(1.1) translateY(-10px);
     box-shadow: 0 10px 20px rgba(0,0,0,0.25);
 }
-.drop-target.drop-hover {
-    box-shadow: 0 0 25px 8px var(--accent-color) !important;
-}
 
-/* --- NEW: Style for highlighting playable ends on pickup --- */
-.playable-end-highlight {
-    border-color: #00bcd4 !important; /* A bright cyan color */
-    box-shadow: 0 0 20px 5px #00bcd4 !important;
+/* --- NEW: Style for the Playable Spot Placeholder --- */
+.play-placeholder {
+    width: 70px;
+    height: 48px; /* Approximate height of a tile */
+    border: 3px dashed var(--accent-color);
+    border-radius: 5px;
+    background: rgba(255, 193, 7, 0.2);
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+.play-placeholder.drop-hover {
+    background: rgba(255, 193, 7, 0.4);
+    border-style: solid;
 }
 
 
