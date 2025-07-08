@@ -1,17 +1,41 @@
 /* =========================================================================
-   client.js — (Simplified & Robust Drag-and-Drop)
+   client.js — (Final, Simplified & Robust Version)
    ========================================================================= */
 
-// ... (All code from the top down is the same until renderBoard) ...
-const socket = io(); const playerName = prompt('Enter your name:') || 'Anonymous'; let roomId = null; let mySeat = null; let currentTurn = null; let myHand = []; let boardState = []; let scores = [0, 0]; let seatMap = {}; let handSizes = {};
-let dragged = { element: null, originalTile: null, tileData: null, isDragging: false, hoveredSide: null };
+const socket = io();
+const playerName = prompt('Enter your name:') || 'Anonymous';
+
+let roomId        = null;
+let mySeat        = null;
+let currentTurn   = null;
+let myHand        = [];
+let boardState    = [];
+let scores        = [0, 0];
+let seatMap       = {};
+let handSizes     = {};
+
+let dragged = {
+    element: null, originalTile: null, tileData: null,
+    isDragging: false, hoveredSide: null
+};
+
+// DOM handles
 const statusEl = document.getElementById('status'); const boardEl = document.getElementById('board'); const handEl = document.getElementById('hand'); const lobbyListEl = document.getElementById('lobbyList'); const lobbyContainerEl = document.getElementById('lobbyContainer'); const playerInfoEl = document.getElementById('playerInfo'); const errorsEl = document.getElementById('errors'); const msgEl = document.getElementById('messages'); const pipEl = document.getElementById('pipCounts'); const topEl = document.getElementById('topPlayer'); const leftEl = document.getElementById('leftPlayer'); const rightEl = document.getElementById('rightPlayer'); const team0ScoreEl = document.getElementById('team0-score'); const team1ScoreEl = document.getElementById('team1-score');
-const reconnectData = { roomId: sessionStorage.getItem('domino_roomId'), reconnectSeat: sessionStorage.getItem('domino_mySeat') };
+
+// Reconnect logic
+const reconnectData = {
+    roomId: sessionStorage.getItem('domino_roomId'),
+    reconnectSeat: sessionStorage.getItem('domino_mySeat')
+};
 socket.emit('findRoom', { playerName, ...reconnectData });
 
-const setStatus = txt => (statusEl.textContent = txt); const showError = txt => { errorsEl.textContent = txt; setTimeout(() => (errorsEl.textContent = ''), 4000); }; const addMsg = txt => { const p = document.createElement('div'); p.textContent = txt; msgEl.prepend(p); }; function renderLobby(players) { lobbyListEl.innerHTML = ''; players.forEach(p => { const li = document.createElement('li'); li.textContent = `Seat ${p.seat}: ${p.name}`; lobbyListEl.appendChild(li); }); }
+/* ── Helpers ──────────────────────────────────────────────────────────── */
+const setStatus = txt => (statusEl.textContent = txt);
+const showError = txt => { errorsEl.textContent = txt; setTimeout(() => (errorsEl.textContent = ''), 4000); };
+const addMsg = txt => { const p = document.createElement('div'); p.textContent = txt; msgEl.prepend(p); };
+function renderLobby(players) { lobbyListEl.innerHTML = ''; players.forEach(p => { const li = document.createElement('li'); li.textContent = `Seat ${p.seat}: ${p.name}`; lobbyListEl.appendChild(li); }); }
 
-// --- UPDATED: No longer wraps tiles in containers ---
+// --- UPDATED: To correctly add drop targets ---
 function renderBoard() {
     boardEl.innerHTML = '';
     if (boardState.length === 0) {
@@ -26,18 +50,52 @@ function renderBoard() {
             d.innerHTML = `<span>${t[0]}</span><span>${t[1]}</span>`;
             boardEl.appendChild(d);
         });
+
+        if (boardEl.children.length > 0) {
+            const firstTile = boardEl.firstChild;
+            const lastTile = boardEl.lastChild;
+            const isFirstTileDouble = boardState[0][0] === boardState[0][1];
+
+            firstTile.classList.add('drop-target');
+            firstTile.dataset.side = 'left';
+
+            if (firstTile !== lastTile || isFirstTileDouble) {
+                lastTile.classList.add('drop-target');
+                lastTile.dataset.side = 'right';
+            }
+        }
     }
 }
 
-function renderPlaceholder() { const placeholder = document.createElement('div'); placeholder.className = 'tile-placeholder'; const isFirstGameRound = scores[0] === 0 && scores[1] === 0; placeholder.textContent = isFirstGameRound ? '6|6' : 'Play Tile'; boardEl.appendChild(placeholder); }
-function renderHand() { handEl.innerHTML = ''; myHand.forEach((tileData) => { const d = document.createElement('div'); d.className = 'tile'; if (currentTurn !== mySeat) d.classList.add('disabled'); d.innerHTML = `<span>${tileData[0]}</span><span>${tileData[1]}</span>`; if (currentTurn === mySeat) { d.addEventListener('mousedown', (e) => handleDragStart(e, tileData, d)); d.addEventListener('touchstart', (e) => handleDragStart(e, tileData, d), { passive: false }); } handEl.appendChild(d); }); }
+function renderPlaceholder() {
+    const placeholder = document.createElement('div');
+    placeholder.className = 'tile-placeholder';
+    const isFirstGameRound = scores[0] === 0 && scores[1] === 0;
+    placeholder.textContent = isFirstGameRound ? '6|6' : 'Play Tile';
+    boardEl.appendChild(placeholder);
+}
+
+function renderHand() {
+    handEl.innerHTML = '';
+    myHand.forEach((tileData) => {
+        const d = document.createElement('div');
+        d.className = 'tile';
+        if (currentTurn !== mySeat) d.classList.add('disabled');
+        d.innerHTML = `<span>${tileData[0]}</span><span>${tileData[1]}</span>`;
+        if (currentTurn === mySeat) {
+            d.addEventListener('mousedown', (e) => handleDragStart(e, tileData, d));
+            d.addEventListener('touchstart', (e) => handleDragStart(e, tileData, d), { passive: false });
+        }
+        handEl.appendChild(d);
+    });
+}
+
 function seatPos(seat) { if (seat === mySeat) return 'self'; const diff = (seat - mySeat + 4) % 4; if (diff === 1) return 'right'; if (diff === 2) return 'top'; return 'left'; }
 function renderOpponents() { const playerAreas = { top: topEl, left: leftEl, right: rightEl }; Object.values(playerAreas).forEach(el => el.innerHTML = ''); Object.entries(seatMap).forEach(([s, info]) => { const seat = +s; if (seat === mySeat) return; const pos = seatPos(seat); const areaEl = playerAreas[pos]; if (areaEl) { const nameEl = document.createElement('div'); nameEl.textContent = `${info.name} (Seat ${seat})`; areaEl.appendChild(nameEl); const handDisplayEl = document.createElement('div'); handDisplayEl.className = 'player-area-hand-display'; const count = handSizes[seat] || 0; for (let i = 0; i < count; i++) { const dummy = document.createElement('div'); dummy.className = 'dummy-tile'; handDisplayEl.appendChild(dummy); } areaEl.appendChild(handDisplayEl); } }); }
 function renderScores() { team0ScoreEl.textContent = scores[0]; team1ScoreEl.textContent = scores[1]; }
 function renderPips(pipCounts) { pipEl.textContent = pipCounts ? Object.entries(pipCounts).map(([p, c]) => `${p}:${c}`).join(' | ') : ''; }
 
-
-/* ─── Drag and Drop Logic (REWRITTEN) ────────────────────────────────── */
+/* ─── Drag and Drop Logic (Simplified & Corrected) ────────────────────── */
 
 function handleDragStart(e, tileData, tileElement) {
     if (e.type === 'touchstart') e.preventDefault();
@@ -48,7 +106,7 @@ function handleDragStart(e, tileData, tileElement) {
     dragged.element.classList.add('dragging');
     document.body.appendChild(dragged.element);
     tileElement.classList.add('ghost');
-
+    
     highlightPlayableEnds(tileData); // Highlight valid spots
 
     const pos = getEventPosition(e);
@@ -67,6 +125,7 @@ function handleDragMove(e) {
     moveDraggedElement(pos.x, pos.y);
 
     let onTarget = false;
+    // The drop targets are now the highlighted ends on the board
     document.querySelectorAll('.playable-end').forEach(target => {
         const rect = target.getBoundingClientRect();
         if (pos.x > rect.left && pos.x < rect.right && pos.y > rect.top && pos.y < rect.bottom) {
@@ -94,6 +153,7 @@ function handleDragEnd() {
 
 function cleanupDrag() {
     if (dragged.element) dragged.element.remove();
+    // Remove all highlight and hover classes
     document.querySelectorAll('.playable-end').forEach(el => el.classList.remove('playable-end', 'drop-hover'));
     document.removeEventListener('mousemove', handleDragMove);
     document.removeEventListener('mouseup', handleDragEnd);
@@ -102,21 +162,20 @@ function cleanupDrag() {
     dragged = { element: null, originalTile: null, tileData: null, isDragging: false, hoveredSide: null };
 }
 
-// THIS FUNCTION IS REWRITTEN
+// --- REWRITTEN: To highlight existing tiles, not create new ones ---
 function highlightPlayableEnds(tileData) {
     const boardEnds = getBoardEnds();
-    if (!boardEnds) return;
-
     const [p1, p2] = tileData;
-    const isFirstMove = boardState.length === 0;
 
-    // Handle first move placeholder
-    if (isFirstMove) {
-        if ((p1 === 6 && p2 === 6) || scores[0] > 0 || scores[1] > 0) {
+    // Handle the first move (placeholder)
+    if (!boardEnds) {
+        const isFirstGameRound = scores[0] === 0 && scores[1] === 0;
+        // Only allow playing the [6|6] on the first round
+        if (isFirstGameRound && p1 === 6 && p2 === 6) {
             const placeholder = boardEl.querySelector('.tile-placeholder');
             if (placeholder) {
                 placeholder.classList.add('playable-end');
-                placeholder.dataset.side = 'right';
+                placeholder.dataset.side = 'right'; // Default side for the first move
             }
         }
         return;
@@ -127,18 +186,17 @@ function highlightPlayableEnds(tileData) {
         boardEnds.leftTile.classList.add('playable-end');
         boardEnds.leftTile.dataset.side = 'left';
     }
-    if (boardEnds.rightTile !== boardEnds.leftTile) {
-        if (p1 === boardEnds.rightPip || p2 === boardEnds.rightPip) {
-            boardEnds.rightTile.classList.add('playable-end');
-            boardEnds.rightTile.dataset.side = 'right';
-        }
+    // Use `else if` to prevent double-highlighting the same tile if it's the only one
+    else if (p1 === boardEnds.rightPip || p2 === boardEnds.rightPip) {
+        boardEnds.rightTile.classList.add('playable-end');
+        boardEnds.rightTile.dataset.side = 'right';
     }
 }
 
 function moveDraggedElement(x, y) { if (!dragged.element) return; dragged.element.style.left = `${x}px`; dragged.element.style.top = `${y}px`; }
 function getEventPosition(e) { return e.touches ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : { x: e.clientX, y: e.clientY }; }
 
-// THIS FUNCTION IS SIMPLIFIED
+// --- REWRITTEN: To be simpler ---
 function getBoardEnds() {
     if (boardState.length === 0) return null;
     return {
