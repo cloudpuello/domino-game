@@ -17,7 +17,7 @@ const teamOf    = seat => seat % 2;
  */
 function placeTile(room, tile, sideHint) {
   let [a, b] = tile;
-  let side   = sideHint;                      // 'left' | 'right' | undefined
+  let side   = sideHint;
 
   const fitsLeft  = a === room.leftEnd  || b === room.leftEnd;
   const fitsRight = a === room.rightEnd || b === room.rightEnd;
@@ -63,13 +63,13 @@ function initNewRound(room, io) {
     isRoundOver: false,
   });
 
-  // This is the corrected line
-  dealHands(room.players);
+  // Call the robust dealHands function with the whole room
+  dealHands(room);
 
   let opener;
   if (room.isFirstRound) {
     opener = +Object.keys(room.players).find(s =>
-      room.players[s].hand.some(([a, b]) => a === 6 && b === 6)
+      room.players[s] && room.players[s].hand.some(([a, b]) => a === 6 && b === 6)
     );
     if (opener === undefined) opener = 0;
   } else {
@@ -81,6 +81,8 @@ function initNewRound(room, io) {
 
   // Send each player their hand
   Object.values(room.players).forEach(p => {
+    if (!p) return; // Safeguard for disconnected players
+
     io.to(p.socketId).emit('roundStart', {
       yourHand: p.hand,
       startingSeat: opener,
@@ -97,6 +99,5 @@ module.exports = {
   nextSeat,
   teamOf,
   placeTile,
-  dealHands,     // (exported for convenience)
-  initNewRound,  // <-- new export
+  initNewRound,
 };
