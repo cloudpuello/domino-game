@@ -1,15 +1,15 @@
 // engine/utils.js
 // ---------------------------------------------------------------------------
-//  Small, reusable helpers (deck creation / shuffling / dealing)
+//  Shared helpers – newDeck()   |   dealHands(room)
 // ---------------------------------------------------------------------------
 
-function newDeck() {
+/** Return a shuffled double-six deck (28 tiles). */
+function newDeck () {
   const deck = [];
-  for (let i = 0; i <= 6; i++) {
-    for (let j = i; j <= 6; j++) {
-      deck.push([i, j]);         // push tile [i|j]
-    }
+  for (let hi = 0; hi <= 6; hi++) {
+    for (let lo = hi; lo <= 6; lo++) deck.push([hi, lo]);
   }
+
   // Fisher-Yates shuffle
   for (let i = deck.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -18,11 +18,23 @@ function newDeck() {
   return deck;
 }
 
-function dealHands(players) {
+/**
+ * dealHands(room)
+ * -------------------------------------------------------
+ *  • draws a fresh deck
+ *  • gives **every connected player** 7 tiles
+ *    (skips empty seats or yet-to-connect players)
+ */
+function dealHands (room) {
   const deck = newDeck();
-  Object.values(players).forEach((p, idx) => {
-    p.hand = deck.slice(idx * 7, idx * 7 + 7);
-  });
+  let cursor = 0;
+
+  Object.values(room.players)          // { 0: Player, 1: Player, 2: undefined, … }
+        .filter(Boolean)               // keep only real Player instances
+        .forEach(player => {
+          player.hand = deck.slice(cursor, cursor + 7);
+          cursor += 7;
+        });
 }
 
 module.exports = { newDeck, dealHands };
