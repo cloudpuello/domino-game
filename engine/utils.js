@@ -21,16 +21,16 @@ function newDeck () {
 /**
  * dealHands(room)
  * -------------------------------------------------------
- *  • draws a fresh deck
- *  • gives **every connected player** 7 tiles
- *    (skips empty seats or yet-to-connect players)
+ * • draws a fresh deck
+ * • gives **every connected player** 7 tiles
+ * (skips empty seats or yet-to-connect players)
  */
 function dealHands (room) {
   const deck = newDeck();
   let cursor = 0;
 
-  Object.values(room.players)          // { 0: Player, 1: Player, 2: undefined, … }
-        .filter(Boolean)               // keep only real Player instances
+  Object.values(room.players)           // { 0: Player, 1: Player, 2: undefined, … }
+        .filter(Boolean)                // keep only real Player instances
         .forEach(player => {
           player.hand = deck.slice(cursor, cursor + 7);
           cursor += 7;

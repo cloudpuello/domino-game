@@ -12,12 +12,12 @@ const teamOf    = seat => seat % 2;
 
 /**
  * placeTile(room, tile, sideHint)
- *   Adds a tile to either end if it fits.
- *   Returns true on success, false if illegal.
+ * Adds a tile to either end if it fits.
+ * Returns true on success, false if illegal.
  */
 function placeTile(room, tile, sideHint) {
   let [a, b] = tile;
-  let side   = sideHint;                        // 'left' | 'right' | undefined
+  let side   = sideHint;                      // 'left' | 'right' | undefined
 
   const fitsLeft  = a === room.leftEnd  || b === room.leftEnd;
   const fitsRight = a === room.rightEnd || b === room.rightEnd;
@@ -63,7 +63,8 @@ function initNewRound(room, io) {
     isRoundOver: false,
   });
 
- dealHands(room);
+  // This is the corrected line
+  dealHands(room.players);
 
   let opener;
   if (room.isFirstRound) {

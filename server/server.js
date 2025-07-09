@@ -10,10 +10,10 @@ const {
   placeTile,
   nextSeat,
   teamOf,
-  initNewRound,                 // from /engine
+  initNewRound,                  // from /engine
 } = require('../engine/game');
 
-const { dealHands } = require('../engine/utils');
+// The `dealHands` import is not needed here, as initNewRound handles it.
 
 const app    = express();
 const server = http.createServer(app);
@@ -23,7 +23,7 @@ const PORT   = 3000;
 app.use(express.static('public'));
 
 /* ---------------------------------------------------------------------
- *  Player + Room definitions
+ * Player + Room definitions
  * ------------------------------------------------------------------- */
 class Player {
   constructor(socketId, name, seat) {
@@ -61,7 +61,7 @@ function createRoom(id) {
 }
 
 /* ---------------------------------------------------------------------
- *  advanceToNextTurn  (unchanged)
+ * advanceToNextTurn  (unchanged)
  * ------------------------------------------------------------------- */
 function advanceToNextTurn(room) {
   let nextPlayerSeat = room.turn;
@@ -93,14 +93,14 @@ function advanceToNextTurn(room) {
 }
 
 /* ---------------------------------------------------------------------
- *  broadcastHands / scoring helpers  (unchanged bodies)
+ * broadcastHands / scoring helpers  (unchanged bodies)
  * ------------------------------------------------------------------- */
 function broadcastHands(room) { /* ... unchanged implementation ... */ }
-function handleTranca(room)    { /* ... unchanged implementation ... */ }
+function handleTranca(room)   { /* ... unchanged implementation ... */ }
 function handleRoundWin(room,wSeat,endsBefore){ /* ... unchanged ... */ }
 
 /* ---------------------------------------------------------------------
- *  maybeStartNextRound now calls engine.initNewRound(room, io)
+ * maybeStartNextRound now calls engine.initNewRound(room, io)
  * ------------------------------------------------------------------- */
 function maybeStartNextRound(room) {
   if (room.scores.some(s=>s>=200)) {
@@ -109,11 +109,11 @@ function maybeStartNextRound(room) {
     delete rooms[room.id];
     return;
   }
-  initNewRound(room, io);          // << engine version
+  initNewRound(room, io);       // << engine version
 }
 
 /* ---------------------------------------------------------------------
- *  Socket.IO connection handler
+ * Socket.IO connection handler
  * ------------------------------------------------------------------- */
 io.on('connection', socket => {
 
