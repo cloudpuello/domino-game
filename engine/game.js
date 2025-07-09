@@ -19,6 +19,16 @@ function placeTile(room, tile, sideHint) {
   let [a, b] = tile;
   let side   = sideHint;
 
+  /* ------------------------------------------------------------
+   * First move of the round – seed the board & ends immediately.
+   * ---------------------------------------------------------- */
+  if (room.board.length === 0) {
+    room.board.push([a, b]);   // orientation unimportant for opener
+    room.leftEnd  = a;
+    room.rightEnd = b;
+    return true;
+  }
+
   const fitsLeft  = a === room.leftEnd  || b === room.leftEnd;
   const fitsRight = a === room.rightEnd || b === room.rightEnd;
   if (!fitsLeft && !fitsRight) return false;
