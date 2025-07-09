@@ -1,6 +1,6 @@
 // engine/utils.js
 // ---------------------------------------------------------------------------
-//  Shared helpers – newDeck()   |   dealHands(room)
+//  Shared helpers – newDeck()   |   dealHands(roomOrPlayers)
 // ---------------------------------------------------------------------------
 
 /** Return a shuffled double-six deck (28 tiles). */
@@ -19,21 +19,25 @@ function newDeck () {
 }
 
 /**
- * dealHands(room)
+ * dealHands(roomOrPlayers)
  * -------------------------------------------------------
- * • draws a fresh deck
- * • gives **every connected player** 7 tiles
- * (skips empty seats or yet-to-connect players)
+ * • Accepts EITHER the whole room OR the players map.
+ * • Draws a fresh deck and gives every connected player 7 tiles.
+ * • Silently returns if nothing meaningful to deal.
  */
-function dealHands (room) {
-  const deck = newDeck();
-  let cursor = 0;
+function dealHands (roomOrPlayers) {
+  // Allow both call signatures: dealHands(room) or dealHands(room.players)
+  const players = roomOrPlayers?.players ?? roomOrPlayers;
+  if (!players) return;                       // nothing to deal to
 
-  Object.values(room.players)           // { 0: Player, 1: Player, 2: undefined, … }
-        .filter(Boolean)                // keep only real Player instances
+  const deck   = newDeck();
+  let   cursor = 0;
+
+  Object.values(players)                      // { 0: Player, 1: Player, 2: null, … }
+        .filter(Boolean)                      // keep only real Player instances
         .forEach(player => {
           player.hand = deck.slice(cursor, cursor + 7);
-          cursor += 7;
+          cursor     += 7;
         });
 }
 
