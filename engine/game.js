@@ -10,20 +10,16 @@ const turnOrder = [0, 1, 2, 3];
 const nextSeat  = seat => turnOrder[(turnOrder.indexOf(seat) + 1) % 4];
 const teamOf    = seat => seat % 2;
 
-/**
- * placeTile(room, tile, sideHint)
- * Adds a tile to either end if it fits.
- * Returns true on success, false if illegal.
- */
+/* ────────────────────────────────────────────────────────────────────────
+ * placeTile – validates and places a tile, seeding ends on the first move
+ * ────────────────────────────────────────────────────────────────────── */
 function placeTile(room, tile, sideHint) {
   let [a, b] = tile;
   let side   = sideHint;
 
-  /* ------------------------------------------------------------
-   * First move of the round – seed the board & ends immediately.
-   * ---------------------------------------------------------- */
+  /* First tile of the round → seed the board instantly */
   if (room.board.length === 0) {
-    room.board.push([a, b]);   // orientation unimportant for opener
+    room.board.push([a, b]);
     room.leftEnd  = a;
     room.rightEnd = b;
     return true;
@@ -57,9 +53,9 @@ function placeTile(room, tile, sideHint) {
   return true;
 }
 
-// ---------------------------------------------------------------------------
-//  initNewRound  – resets room state, deals hands, notifies players
-// ---------------------------------------------------------------------------
+/* ────────────────────────────────────────────────────────────────────────
+ * initNewRound – reset state, deal hands, choose opener, notify players
+ * ────────────────────────────────────────────────────────────────────── */
 function initNewRound(room, io) {
   Object.assign(room, {
     board: [],
@@ -73,38 +69,40 @@ function initNewRound(room, io) {
     isRoundOver: false,
   });
 
-  // Call the robust dealHands function with the whole room
+  /* Deal 7 tiles to every connected seat */
   dealHands(room);
 
+  /* Pick opener */
   let opener;
   if (room.isFirstRound) {
-    opener = +Object.keys(room.players).find(s =>
-      room.players[s] && room.players[s].hand.some(([a, b]) => a === 6 && b === 6)
+    const openerStr = Object.keys(room.players).find(s =>
+      room.players[s] &&
+      room.players[s].hand.some(([x, y]) => x === 6 && y === 6)
     );
-    if (opener === undefined) opener = 0;
+    opener = openerStr !== undefined ? Number(openerStr) : 0;
+    room.isFirstRound = false;            // flip the flag so this runs only once
   } else {
-    opener = room.lastWinnerSeat;
+    opener = room.lastWinnerSeat ?? 0;    // fallback to seat 0 just in case
   }
 
   room.turn        = opener;
   room.turnStarter = opener;
 
-  // Send each player their hand
+  /* Send each player their hand */
   Object.values(room.players).forEach(p => {
-    if (!p) return; // Safeguard for disconnected players
-
+    if (!p) return;
     io.to(p.socketId).emit('roundStart', {
-      yourHand: p.hand,
+      yourHand:     p.hand,
       startingSeat: opener,
-      scores: room.scores,
+      scores:       room.scores,
     });
   });
 
-  // Announce first turn
+  /* Announce first turn */
   io.in(room.id).emit('turnChanged', opener);
 }
 
-// ---------------------------------------------------------------------------
+/* --------------------------------------------------------------------- */
 module.exports = {
   nextSeat,
   teamOf,
