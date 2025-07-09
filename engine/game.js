@@ -63,7 +63,7 @@ function initNewRound(room, io) {
     isRoundOver: false,
   });
 
-  dealHands(room);
+ dealHands(room);
 
   let opener;
   if (room.isFirstRound) {
