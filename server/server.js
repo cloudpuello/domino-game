@@ -1,389 +1,472 @@
 /* =====================================================================
- * server/server.js  –  Socket.IO domino server (REWRITTEN)
+ * server.js — Dominican Domino Server
+ * 
+ * AI DEVELOPMENT NOTES:
+ * - This server handles 4-player domino games with team scoring
+ * - Players sit in seats 0-3, with 0&2 vs 1&3 as teams
+ * - First to 200 points wins
+ * - Uses Socket.IO for real-time communication
+ * - All game state is stored in memory (add database for persistence)
  * =================================================================== */
 
 const express = require('express');
 const http = require('http');
-const { Server } = require('socket.io');
+const socketIo = require('socket.io');
+const path = require('path');
 
-/* -- Core game engine ------------------------------------------------ */
-const {
-  placeTile,
-  nextSeat,
-  teamOf,
-  initNewRound,
-} = require('../engine/game');
-
-/* -- Server setup ---------------------------------------------------- */
+// ────────────────────────────────────────────────────────────────────────
+// Server Setup
+// ────────────────────────────────────────────────────────────────────────
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: '*' } });
-const PORT = 3000;
+const io = socketIo(server);
+const PORT = process.env.PORT || 3000;
 
+// ────────────────────────────────────────────────────────────────────────
+// Static Files - IMPORTANT: This serves your game files
+// ────────────────────────────────────────────────────────────────────────
 app.use(express.static('public'));
+app.use('/shared', express.static(path.join(__dirname, 'shared')));
 
-/* ────────────────────────────────────────────────────────────────────────
- * Player class - represents a connected player
- * ────────────────────────────────────────────────────────────────────── */
-class Player {
-  constructor(socketId, name, seat) {
-    this.socketId = socketId;
-    this.name = name;
-    this.seat = seat;
-    this.hand = [];
-    this.isConnected = true;
+// ────────────────────────────────────────────────────────────────────────
+// Game Constants
+// ────────────────────────────────────────────────────────────────────────
+const HAND_SIZE = 7;
+const WINNING_SCORE = 200;
+const OPENING_TILE = [6, 6];
+
+// ────────────────────────────────────────────────────────────────────────
+// Game State Storage
+// AI NOTE: In production, use Redis or a database instead
+// ────────────────────────────────────────────────────────────────────────
+const gameRooms = new Map(); // roomId -> GameRoom object
+
+// ────────────────────────────────────────────────────────────────────────
+// Game Room Class - Manages a single game
+// ────────────────────────────────────────────────────────────────────────
+class GameRoom {
+  constructor(roomId) {
+    this.roomId = roomId;
+    this.players = [null, null, null, null]; // 4 seats
+    this.gameState = null;
+    this.scores = [0, 0]; // Team scores
+    this.isGameActive = false;
   }
 
-  handSum() {
-    return this.hand.reduce((sum, [a, b]) => sum + a + b, 0);
+  // Add a player to the room
+  addPlayer(player, seat) {
+    this.players[seat] = player;
+    return true;
   }
 
-  hasTile(targetTile) {
-    const [targetA, targetB] = targetTile;
-    return this.hand.some(([a, b]) => 
-      (a === targetA && b === targetB) || (a === targetB && b === targetA)
-    );
+  // Check if room is full
+  isFull() {
+    return this.players.every(p => p !== null);
   }
 
-  removeTile(targetTile) {
-    const [targetA, targetB] = targetTile;
-    const index = this.hand.findIndex(([a, b]) => 
-      (a === targetA && b === targetB) || (a === targetB && b === targetA)
-    );
-    if (index !== -1) {
-      return this.hand.splice(index, 1)[0];
-    }
-    return null;
-  }
-
-  canPlayOnBoard(leftEnd, rightEnd) {
-    if (leftEnd === null && rightEnd === null) {
-      // First move - must have [6,6]
-      return this.hand.some(([a, b]) => a === 6 && b === 6);
-    }
-    return this.hand.some(([a, b]) => 
-      a === leftEnd || b === leftEnd || a === rightEnd || b === rightEnd
-    );
-  }
-}
-
-/* ────────────────────────────────────────────────────────────────────────
- * Room management
- * ────────────────────────────────────────────────────────────────────── */
-let roomCounter = 1;
-const rooms = {};
-
-function createRoom(id) {
-  rooms[id] = {
-    id,
-    players: {},                 // seat → Player | undefined
-    isGameStarted: false,
-
-    /* Round state */
-    board: [],
-    leftEnd: null,
-    rightEnd: null,
-    pipCounts: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 },
-    turn: null,
-    turnStarter: null,
-    lastMoverSeat: null,
-    passCount: 0,
-    isRoundOver: false,
-
-    /* Game state */
-    isFirstRound: true,
-    lastWinnerSeat: null,
-    scores: [0, 0],
-    reconnectTimers: {},
-  };
-  return rooms[id];
-}
-
-function findAvailableRoom() {
-  return Object.values(rooms).find(room => 
-    !room.isGameStarted && 
-    getConnectedPlayerCount(room) < 4
-  );
-}
-
-function getConnectedPlayerCount(room) {
-  return Object.values(room.players)
-    .filter(player => player && player.isConnected)
-    .length;
-}
-
-function findPlayerRoom(socketId) {
-  return Object.values(rooms).find(room =>
-    Object.values(room.players).some(player => 
-      player && player.socketId === socketId
-    )
-  );
-}
-
-function findPlayerSeat(room, socketId) {
-  return Object.keys(room.players).find(seat =>
-    room.players[seat] && room.players[seat].socketId === socketId
-  );
-}
-
-/* ────────────────────────────────────────────────────────────────────────
- * Turn management
- * ────────────────────────────────────────────────────────────────────── */
-function advanceToNextTurn(room) {
-  let nextPlayerSeat = room.turn;
-  let passedPlayers = 0;
-
-  for (let i = 0; i < 4; i++) {
-    nextPlayerSeat = nextSeat(nextPlayerSeat);
-    const player = room.players[nextPlayerSeat];
-
-    if (!player || !player.isConnected) {
-      io.in(room.id).emit('playerPassed', { 
-        seat: nextPlayerSeat, 
-        reason: 'disconnected' 
-      });
-      passedPlayers++;
-      continue;
-    }
-
-    if (player.canPlayOnBoard(room.leftEnd, room.rightEnd)) {
-      room.turn = nextPlayerSeat;
-      room.passCount = 0;
-      io.in(room.id).emit('turnChanged', room.turn);
-      return;
-    }
-
-    io.in(room.id).emit('playerPassed', { seat: nextPlayerSeat });
-    passedPlayers++;
-  }
-
-  // All players passed - handle tranca
-  if (passedPlayers >= 4) {
-    handleTranca(room);
+  // Get connected players
+  getPlayerList() {
+    return this.players
+      .map((player, seat) => player ? {
+        seat: seat,
+        name: player.name,
+        connected: player.connected
+      } : null)
+      .filter(p => p !== null);
   }
 }
 
-/* ────────────────────────────────────────────────────────────────────────
- * Scoring and round ending
- * ────────────────────────────────────────────────────────────────────── */
-function calculateAllPips(room) {
-  return Object.values(room.players)
-    .filter(player => player && player.isConnected)
-    .reduce((total, player) => total + player.handSum(), 0);
-}
-
-function handleRoundWin(room, winnerSeat, reason) {
-  if (room.isRoundOver) return;
-  
-  room.isRoundOver = true;
-  room.lastWinnerSeat = winnerSeat;
-  
-  const totalPips = calculateAllPips(room);
-  const winnerTeam = teamOf(winnerSeat);
-  let points = totalPips;
-  
-  // Add bonuses based on reason
-  if (reason.includes('capicu')) points += 30;
-  if (reason.includes('paso')) points += 30;
-  
-  room.scores[winnerTeam] += points;
-  
-  io.in(room.id).emit('roundEnded', {
-    winner: winnerSeat,
-    reason,
-    points,
-    scores: room.scores,
-    board: room.board
-  });
-
-  // Check for game over or start next round
-  setTimeout(() => maybeStartNextRound(room), 3000);
-}
-
-function handleTranca(room) {
-  if (room.isRoundOver) return;
-  
-  const lastMover = room.lastMoverSeat;
-  if (lastMover === null) return;
-  
-  const nextPlayer = nextSeat(lastMover);
-  const lastMoverPips = room.players[lastMover]?.handSum() || 0;
-  const nextPlayerPips = room.players[nextPlayer]?.handSum() || 0;
-  
-  const winnerSeat = lastMoverPips <= nextPlayerPips ? lastMover : nextPlayer;
-  handleRoundWin(room, winnerSeat, 'tranca');
-}
-
-function maybeStartNextRound(room) {
-  // Check for game over (200 points)
-  if (room.scores.some(score => score >= 200)) {
-    const winningTeam = room.scores.findIndex(score => score >= 200);
-    io.in(room.id).emit('gameOver', { 
-      winningTeam, 
-      scores: room.scores 
-    });
-    delete rooms[room.id];
-    return;
+// ────────────────────────────────────────────────────────────────────────
+// Domino Game State - Handles game logic
+// ────────────────────────────────────────────────────────────────────────
+class DominoGameState {
+  constructor() {
+    this.tiles = [];
+    this.playerHands = [[], [], [], []];
+    this.board = [];
+    this.currentTurn = null;
+    this.consecutivePasses = 0;
   }
-  
-  // Start next round
-  initNewRound(room, io);
-}
 
-/* ────────────────────────────────────────────────────────────────────────
- * Lobby management
- * ────────────────────────────────────────────────────────────────────── */
-function broadcastLobbyUpdate(room) {
-  const playersList = Object.values(room.players)
-    .filter(player => player)
-    .map(player => ({
-      seat: player.seat,
-      name: player.name,
-      connected: player.isConnected
-    }));
-
-  io.in(room.id).emit('lobbyUpdate', {
-    players: playersList,
-    seatsRemaining: 4 - getConnectedPlayerCount(room),
-  });
-}
-
-function tryStartGame(room) {
-  const connectedCount = getConnectedPlayerCount(room);
-  if (connectedCount === 4 && !room.isGameStarted) {
-    room.isGameStarted = true;
-    io.in(room.id).emit('allPlayersReady');
-    setTimeout(() => initNewRound(room, io), 1500);
+  // Initialize and shuffle tiles
+  initTiles() {
+    this.tiles = [];
+    // Create all 28 dominoes
+    for (let i = 0; i <= 6; i++) {
+      for (let j = i; j <= 6; j++) {
+        this.tiles.push([i, j]);
+      }
+    }
+    // Shuffle
+    for (let i = this.tiles.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [this.tiles[i], this.tiles[j]] = [this.tiles[j], this.tiles[i]];
+    }
   }
-}
 
-/* ────────────────────────────────────────────────────────────────────────
- * Socket event handlers
- * ────────────────────────────────────────────────────────────────────── */
-io.on('connection', socket => {
+  // Deal tiles to players
+  dealTiles() {
+    this.initTiles();
+    // Deal 7 tiles to each player
+    for (let seat = 0; seat < 4; seat++) {
+      for (let i = 0; i < HAND_SIZE; i++) {
+        this.playerHands[seat].push(this.tiles.pop());
+      }
+    }
+  }
 
-  /* -------- findRoom / lobby join ---------------------------------- */
-  socket.on('findRoom', ({ playerName, roomId, reconnectSeat }) => {
-    
-    // TODO: Handle reconnection logic here if needed
-    if (roomId && rooms[roomId] && reconnectSeat !== undefined) {
-      // Reconnection logic would go here
-      return;
+  // Find who has double-six
+  findStartingPlayer() {
+    for (let seat = 0; seat < 4; seat++) {
+      const hasDoubleSix = this.playerHands[seat].some(
+        tile => tile[0] === 6 && tile[1] === 6
+      );
+      if (hasDoubleSix) {
+        this.currentTurn = seat;
+        return seat;
+      }
+    }
+    // Fallback - shouldn't happen with full deck
+    this.currentTurn = 0;
+    return 0;
+  }
+
+  // Get board ends for matching
+  getBoardEnds() {
+    if (this.board.length === 0) return null;
+    return {
+      left: this.board[0][0],
+      right: this.board[this.board.length - 1][1]
+    };
+  }
+
+  // Check if a move is valid
+  isValidMove(tile, side) {
+    // First move must be double-six
+    if (this.board.length === 0) {
+      return tile[0] === 6 && tile[1] === 6;
     }
 
-    /* Find or create lobby */
-    let room = findAvailableRoom();
-    if (!room) {
-      room = createRoom(`room${roomCounter++}`);
-    }
-
-    /* Find available seat */
-    const availableSeat = [0, 1, 2, 3].find(seat => !room.players[seat]);
-    if (availableSeat === undefined) {
-      socket.emit('errorMessage', 'Room is full');
-      return;
-    }
-
-    /* Create and add player */
-    const player = new Player(
-      socket.id, 
-      playerName || `Player ${availableSeat + 1}`, 
-      availableSeat
-    );
-    room.players[availableSeat] = player;
-
-    socket.join(room.id);
-    socket.emit('roomJoined', { 
-      roomId: room.id, 
-      seat: availableSeat 
-    });
-
-    broadcastLobbyUpdate(room);
-    tryStartGame(room);
-  });
-
-  /* -------- playTile ---------------------------------------------- */
-  socket.on('playTile', ({ roomId, seat, tile, side }) => {
-    const room = rooms[roomId];
-    if (!room) {
-      return socket.emit('errorMessage', 'Room not found');
-    }
-
-    if (room.isRoundOver) {
-      return socket.emit('errorMessage', 'Round is over');
-    }
-
-    if (room.turn !== seat) {
-      return socket.emit('errorMessage', 'Not your turn');
-    }
-
-    const player = room.players[seat];
-    if (!player || !player.isConnected) {
-      return socket.emit('errorMessage', 'Player not found');
-    }
-
-    if (!player.hasTile(tile)) {
-      return socket.emit('errorMessage', 'You do not have that tile');
-    }
-
-    /* Try to place the tile */
-    if (!placeTile(room, tile, side)) {
-      return socket.emit('errorMessage', 'Invalid tile placement');
-    }
-
-    /* Remove tile from player's hand */
-    player.removeTile(tile);
-    room.lastMoverSeat = seat;
-
-    /* Update pip counts */
+    const ends = this.getBoardEnds();
     const [a, b] = tile;
-    room.pipCounts[a]++;
-    room.pipCounts[b]++;
 
-    /* Send updated hand to player */
-    socket.emit('updateHand', player.hand);
+    if (side === 'left') {
+      return a === ends.left || b === ends.left;
+    } else {
+      return a === ends.right || b === ends.right;
+    }
+  }
 
-    /* Broadcast move to all players */
-    io.in(room.id).emit('broadcastMove', {
-      seat,
-      tile,
-      board: room.board,
-      pipCounts: room.pipCounts
+  // Play a tile
+  playTile(seat, tile, side) {
+    // Remove from hand
+    const handIndex = this.playerHands[seat].findIndex(
+      t => t[0] === tile[0] && t[1] === tile[1]
+    );
+    if (handIndex === -1) return false;
+    
+    this.playerHands[seat].splice(handIndex, 1);
+
+    // Add to board
+    if (this.board.length === 0) {
+      this.board.push(tile);
+    } else {
+      const ends = this.getBoardEnds();
+      let orientedTile = [...tile];
+
+      if (side === 'left') {
+        // Make sure tile connects properly
+        if (orientedTile[1] !== ends.left) {
+          orientedTile.reverse();
+        }
+        this.board.unshift(orientedTile);
+      } else {
+        // Make sure tile connects properly
+        if (orientedTile[0] !== ends.right) {
+          orientedTile.reverse();
+        }
+        this.board.push(orientedTile);
+      }
+    }
+
+    this.consecutivePasses = 0;
+    this.advanceTurn();
+    return true;
+  }
+
+  // Move to next player
+  advanceTurn() {
+    this.currentTurn = (this.currentTurn + 1) % 4;
+  }
+
+  // Check if round is over
+  checkRoundEnd() {
+    // Check for domino (empty hand)
+    for (let seat = 0; seat < 4; seat++) {
+      if (this.playerHands[seat].length === 0) {
+        return { ended: true, winner: seat, reason: 'domino' };
+      }
+    }
+
+    // Check for blocked game (all passed)
+    if (this.consecutivePasses >= 4) {
+      // Find winner by lowest pip count
+      let lowestSum = Infinity;
+      let winner = -1;
+      
+      for (let seat = 0; seat < 4; seat++) {
+        const sum = this.playerHands[seat].reduce((total, tile) => {
+          return total + tile[0] + tile[1];
+        }, 0);
+        if (sum < lowestSum) {
+          lowestSum = sum;
+          winner = seat;
+        }
+      }
+      
+      return { ended: true, winner: winner, reason: 'blocked' };
+    }
+
+    return { ended: false };
+  }
+
+  // Calculate points for the round
+  calculatePoints() {
+    let points = 0;
+    for (let seat = 0; seat < 4; seat++) {
+      for (const tile of this.playerHands[seat]) {
+        points += tile[0] + tile[1];
+      }
+    }
+    return points;
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// Socket.IO Connection Handler
+// ────────────────────────────────────────────────────────────────────────
+io.on('connection', (socket) => {
+  console.log('New connection:', socket.id);
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Find or Create Room
+  // ──────────────────────────────────────────────────────────────────────
+  socket.on('findRoom', ({ playerName, roomId, reconnectSeat }) => {
+    // Try to reconnect to existing room
+    if (roomId && reconnectSeat !== null) {
+      const room = gameRooms.get(roomId);
+      if (room && room.players[reconnectSeat]) {
+        // Reconnect player
+        room.players[reconnectSeat].socket = socket;
+        room.players[reconnectSeat].connected = true;
+        
+        socket.join(roomId);
+        socket.emit('roomJoined', { roomId, seat: parseInt(reconnectSeat) });
+        
+        // Send current game state if active
+        if (room.isGameActive && room.gameState) {
+          socket.emit('roundStart', {
+            yourHand: room.gameState.playerHands[reconnectSeat],
+            startingSeat: room.gameState.currentTurn,
+            scores: room.scores
+          });
+          
+          // Send board state
+          socket.emit('broadcastMove', {
+            seat: -1,
+            tile: null,
+            board: room.gameState.board
+          });
+        }
+        
+        io.to(roomId).emit('lobbyUpdate', { players: room.getPlayerList() });
+        return;
+      }
+    }
+
+    // Find room with space or create new one
+    let targetRoom = null;
+    let assignedSeat = null;
+
+    // Look for existing room with space
+    for (const [id, room] of gameRooms) {
+      if (!room.isGameActive) {
+        for (let seat = 0; seat < 4; seat++) {
+          if (room.players[seat] === null) {
+            targetRoom = room;
+            assignedSeat = seat;
+            break;
+          }
+        }
+        if (targetRoom) break;
+      }
+    }
+
+    // Create new room if needed
+    if (!targetRoom) {
+      const newRoomId = 'room_' + Date.now();
+      targetRoom = new GameRoom(newRoomId);
+      gameRooms.set(newRoomId, targetRoom);
+      assignedSeat = 0;
+    }
+
+    // Add player
+    const player = {
+      socket: socket,
+      name: playerName,
+      seat: assignedSeat,
+      connected: true
+    };
+
+    targetRoom.addPlayer(player, assignedSeat);
+    socket.join(targetRoom.roomId);
+
+    // Send room info
+    socket.emit('roomJoined', { 
+      roomId: targetRoom.roomId, 
+      seat: assignedSeat 
     });
 
-    /* Check for round win */
-    if (player.hand.length === 0) {
-      handleRoundWin(room, seat, 'emptied hand');
+    // Update all players in room
+    io.to(targetRoom.roomId).emit('lobbyUpdate', { 
+      players: targetRoom.getPlayerList() 
+    });
+
+    // Start game if room is full
+    if (targetRoom.isFull() && !targetRoom.isGameActive) {
+      startGame(targetRoom);
+    }
+  });
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Play Tile
+  // ──────────────────────────────────────────────────────────────────────
+  socket.on('playTile', ({ roomId, seat, tile, side }) => {
+    const room = gameRooms.get(roomId);
+    if (!room || !room.isGameActive) return;
+
+    // Validate turn
+    if (room.gameState.currentTurn !== seat) {
+      socket.emit('errorMessage', 'Not your turn!');
       return;
     }
 
-    /* Advance to next turn */
-    advanceToNextTurn(room);
-  });
-
-  /* -------- disconnect -------------------------------------------- */
-  socket.on('disconnect', () => {
-    const room = findPlayerRoom(socket.id);
-    if (!room) return;
-
-    const seat = findPlayerSeat(room, socket.id);
-    if (seat === undefined) return;
-
-    /* Mark player as disconnected */
-    room.players[seat].isConnected = false;
-
-    /* Update lobby if game hasn't started */
-    if (!room.isGameStarted) {
-      broadcastLobbyUpdate(room);
+    // Validate move
+    if (!room.gameState.isValidMove(tile, side)) {
+      socket.emit('errorMessage', 'Invalid move!');
+      return;
     }
 
-    console.log(`Player ${room.players[seat].name} (Seat ${seat}) disconnected from ${room.id}`);
+    // Make move
+    if (room.gameState.playTile(seat, tile, side)) {
+      // Broadcast to all players
+      io.to(roomId).emit('broadcastMove', {
+        seat: seat,
+        tile: tile,
+        board: room.gameState.board
+      });
+
+      // Update player's hand
+      socket.emit('updateHand', room.gameState.playerHands[seat]);
+
+      // Check for round end
+      const result = room.gameState.checkRoundEnd();
+      if (result.ended) {
+        endRound(room, result);
+      } else {
+        // Continue game
+        io.to(roomId).emit('turnChanged', room.gameState.currentTurn);
+      }
+    }
+  });
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Handle Disconnect
+  // ──────────────────────────────────────────────────────────────────────
+  socket.on('disconnect', () => {
+    console.log('Disconnected:', socket.id);
+    
+    // Find and mark player as disconnected
+    for (const [roomId, room] of gameRooms) {
+      for (let seat = 0; seat < 4; seat++) {
+        if (room.players[seat] && room.players[seat].socket === socket) {
+          room.players[seat].connected = false;
+          io.to(roomId).emit('lobbyUpdate', { 
+            players: room.getPlayerList() 
+          });
+          return;
+        }
+      }
+    }
   });
 });
 
-/* ────────────────────────────────────────────────────────────────────────
- * Start server
- * ────────────────────────────────────────────────────────────────────── */
-server.listen(PORT, () =>
-  console.log(`✅ Domino server running at http://localhost:${PORT}`)
-);
+// ────────────────────────────────────────────────────────────────────────
+// Game Functions
+// ────────────────────────────────────────────────────────────────────────
+function startGame(room) {
+  room.isGameActive = true;
+  room.gameState = new DominoGameState();
+  
+  // Deal tiles
+  room.gameState.dealTiles();
+  
+  // Find starting player
+  const startingSeat = room.gameState.findStartingPlayer();
+  
+  // Send game start to all players
+  for (let seat = 0; seat < 4; seat++) {
+    const player = room.players[seat];
+    if (player && player.connected) {
+      player.socket.emit('roundStart', {
+        yourHand: room.gameState.playerHands[seat],
+        startingSeat: startingSeat,
+        scores: room.scores
+      });
+    }
+  }
+}
+
+function endRound(room, result) {
+  const points = room.gameState.calculatePoints();
+  const winningTeam = result.winner % 2;
+  
+  // Update scores
+  room.scores[winningTeam] += points;
+  
+  // Notify players
+  io.to(room.roomId).emit('roundEnded', {
+    winner: result.winner,
+    reason: result.reason,
+    points: points,
+    scores: room.scores,
+    board: room.gameState.board
+  });
+  
+  // Check for game over
+  if (room.scores[0] >= WINNING_SCORE || room.scores[1] >= WINNING_SCORE) {
+    const winningTeam = room.scores[0] >= WINNING_SCORE ? 0 : 1;
+    io.to(room.roomId).emit('gameOver', {
+      winningTeam: winningTeam,
+      scores: room.scores
+    });
+    
+    // Clean up room after delay
+    setTimeout(() => {
+      gameRooms.delete(room.roomId);
+    }, 30000);
+  } else {
+    // Start new round after delay
+    setTimeout(() => {
+      startGame(room);
+    }, 5000);
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// Start Server
+// ────────────────────────────────────────────────────────────────────────
+server.listen(PORT, () => {
+  console.log(`Dominican Domino server running on port ${PORT}`);
+  console.log(`Open http://localhost:${PORT} in 4 browser windows to play!`);
+});

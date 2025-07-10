@@ -1,31 +1,31 @@
 /* =====================================================================
- * client.js — Dominican Domino front-end (Using shared constants)
+ * client.js — Dominican Domino front-end
  * =================================================================== */
 
-/* ────────────────────────────────────────────────────────────────────────
- * Import Constants from shared folder
- * ────────────────────────────────────────────────────────────────────── */
-import { 
-  HIT_PADDING, 
-  ERROR_DISPLAY_TIME, 
-  OPENING_TILE, 
-  HAND_SIZE,
-  DOMINO_WIDTH,
-  DOMINO_HEIGHT,
-  DOMINO_GAP,
-  HAND_DOMINO_WIDTH,
-  HAND_DOMINO_HEIGHT 
-} from '../shared/constants/gameConstants.js';
+// ────────────────────────────────────────────────────────────────────────
+// Constants
+// ────────────────────────────────────────────────────────────────────────
+const HIT_PADDING = 25;
+const ERROR_DISPLAY_TIME = 4000;
+const OPENING_TILE = [6, 6];
+const HAND_SIZE = 7;
 
-/* ────────────────────────────────────────────────────────────────────────
- * Socket connection and player setup
- * ────────────────────────────────────────────────────────────────────── */
+// Domino dimensions (portrait orientation)
+const DOMINO_WIDTH = 40;
+const DOMINO_HEIGHT = 80;
+const HAND_DOMINO_WIDTH = 30;
+const HAND_DOMINO_HEIGHT = 60;
+const DOMINO_GAP = 2;
+
+// ────────────────────────────────────────────────────────────────────────
+// Socket connection and player setup
+// ────────────────────────────────────────────────────────────────────────
 const socket = io();
 const playerName = prompt("Enter your name:") || "Anonymous";
 
-/* ────────────────────────────────────────────────────────────────────────
- * Game state
- * ────────────────────────────────────────────────────────────────────── */
+// ────────────────────────────────────────────────────────────────────────
+// Game state
+// ────────────────────────────────────────────────────────────────────────
 const gameState = {
   roomId: null,
   mySeat: null,
@@ -38,9 +38,9 @@ const gameState = {
   players: []
 };
 
-/* ────────────────────────────────────────────────────────────────────────
- * Drag and drop state
- * ────────────────────────────────────────────────────────────────────── */
+// ────────────────────────────────────────────────────────────────────────
+// Drag and drop state
+// ────────────────────────────────────────────────────────────────────────
 const dragState = {
   element: null,
   originalTile: null,
@@ -49,9 +49,9 @@ const dragState = {
   hoveredSide: null
 };
 
-/* ────────────────────────────────────────────────────────────────────────
- * DOM elements
- * ────────────────────────────────────────────────────────────────────── */
+// ────────────────────────────────────────────────────────────────────────
+// DOM elements
+// ────────────────────────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
 
 const elements = {
@@ -76,9 +76,9 @@ const elements = {
   hand3: $("hand3")
 };
 
-/* ────────────────────────────────────────────────────────────────────────
- * Initialization and reconnection
- * ────────────────────────────────────────────────────────────────────── */
+// ────────────────────────────────────────────────────────────────────────
+// Initialization and reconnection
+// ────────────────────────────────────────────────────────────────────────
 function initializeGame() {
   setupSocketListeners();
   attemptReconnection();
@@ -206,9 +206,9 @@ function ensureHandElements() {
   }
 }
 
-/* ────────────────────────────────────────────────────────────────────────
- * UI Helper functions
- * ────────────────────────────────────────────────────────────────────── */
+// ────────────────────────────────────────────────────────────────────────
+// UI Helper functions
+// ────────────────────────────────────────────────────────────────────────
 function setStatus(text) {
   if (elements.status) {
     elements.status.textContent = text;
@@ -239,9 +239,9 @@ function adjustBoardCenter() {
   }
 }
 
-/* ────────────────────────────────────────────────────────────────────────
- * Snake Formation Logic - Fixed to always go left to right
- * ────────────────────────────────────────────────────────────────────── */
+// ────────────────────────────────────────────────────────────────────────
+// Snake Formation Logic - Fixed to always go left to right
+// ────────────────────────────────────────────────────────────────────────
 function calculateSnakePositions(board, startX, startY) {
   const positions = [];
   
@@ -321,9 +321,9 @@ function calculateSnakePositions(board, startX, startY) {
   return positions;
 }
 
-/* ────────────────────────────────────────────────────────────────────────
- * Domino creation functions
- * ────────────────────────────────────────────────────────────────────── */
+// ────────────────────────────────────────────────────────────────────────
+// Domino creation functions
+// ────────────────────────────────────────────────────────────────────────
 function createBoardDominoElement(domino, position) {
   const element = document.createElement('div');
   element.className = 'board-domino';
@@ -378,9 +378,9 @@ function createHandDominoElement(domino, playerIndex, dominoIndex) {
   return element;
 }
 
-/* ────────────────────────────────────────────────────────────────────────
- * Board rendering with snake formation
- * ────────────────────────────────────────────────────────────────────── */
+// ────────────────────────────────────────────────────────────────────────
+// Board rendering with snake formation
+// ────────────────────────────────────────────────────────────────────────
 function renderBoard() {
   if (!elements.board) return;
   
@@ -423,9 +423,9 @@ function renderPlaceholder() {
   elements.board.appendChild(placeholder);
 }
 
-/* ────────────────────────────────────────────────────────────────────────
- * Hand rendering for all players
- * ────────────────────────────────────────────────────────────────────── */
+// ────────────────────────────────────────────────────────────────────────
+// Hand rendering for all players
+// ────────────────────────────────────────────────────────────────────────
 function renderAllHands() {
   // Clear all hands first
   for (let i = 0; i < 4; i++) {
@@ -482,9 +482,9 @@ function renderPlayerHand(playerIndex, player) {
   }
 }
 
-/* ────────────────────────────────────────────────────────────────────────
- * Game logic helpers
- * ────────────────────────────────────────────────────────────────────── */
+// ────────────────────────────────────────────────────────────────────────
+// Game logic helpers
+// ────────────────────────────────────────────────────────────────────────
 function getBoardEnds() {
   if (gameState.boardState.length === 0) return null;
   
@@ -511,9 +511,9 @@ function isMyTurn() {
   return gameState.currentTurn === gameState.mySeat;
 }
 
-/* ────────────────────────────────────────────────────────────────────────
- * Drag and drop functionality
- * ────────────────────────────────────────────────────────────────────── */
+// ────────────────────────────────────────────────────────────────────────
+// Drag and drop functionality
+// ────────────────────────────────────────────────────────────────────────
 function getEventPosition(event) {
   if (event.touches) {
     return { x: event.touches[0].clientX, y: event.touches[0].clientY };
@@ -656,9 +656,9 @@ function handleDragEnd() {
   cleanupDrag();
 }
 
-/* ────────────────────────────────────────────────────────────────────────
- * Score rendering
- * ────────────────────────────────────────────────────────────────────── */
+// ────────────────────────────────────────────────────────────────────────
+// Score rendering
+// ────────────────────────────────────────────────────────────────────────
 function renderScores() {
   if (elements.team0Score) {
     elements.team0Score.textContent = gameState.scores[0] || 0;
@@ -668,18 +668,18 @@ function renderScores() {
   }
 }
 
-/* ────────────────────────────────────────────────────────────────────────
- * Main update function
- * ────────────────────────────────────────────────────────────────────── */
+// ────────────────────────────────────────────────────────────────────────
+// Main update function
+// ────────────────────────────────────────────────────────────────────────
 function updateGameDisplay() {
   renderBoard();
   renderAllHands();
   renderScores();
 }
 
-/* ────────────────────────────────────────────────────────────────────────
- * Socket event handlers
- * ────────────────────────────────────────────────────────────────────── */
+// ────────────────────────────────────────────────────────────────────────
+// Socket event handlers
+// ────────────────────────────────────────────────────────────────────────
 function setupSocketListeners() {
   socket.on("roomJoined", handleRoomJoined);
   socket.on("lobbyUpdate", handleLobbyUpdate);
@@ -828,7 +828,7 @@ function handleBonusAwarded({ seat, type, points, scores }) {
   addMessage(`Team ${seat % 2} gets +${points} pts for ${type}!`);
 }
 
-/* ────────────────────────────────────────────────────────────────────────
- * Initialize the game when page loads
- * ────────────────────────────────────────────────────────────────────── */
+// ────────────────────────────────────────────────────────────────────────
+// Initialize the game when page loads
+// ────────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', initializeGame);
