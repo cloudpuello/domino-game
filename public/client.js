@@ -21,7 +21,16 @@ const DOMINO_GAP = 2;
 // Socket connection and player setup
 // ────────────────────────────────────────────────────────────────────────
 const socket = io();
-const playerName = prompt("Enter your name:") || "Anonymous";
+
+socket.on('connect', () => {
+  const playerName = prompt("Enter your name:", "Anonymous") || "Anonymous";
+  socket.emit("findRoom", {
+    playerName,
+    roomId: sessionStorage.getItem("domino_roomId"),
+    reconnectSeat: sessionStorage.getItem("domino_mySeat")
+  });
+});
+
 
 // ────────────────────────────────────────────────────────────────────────
 // Game state
@@ -81,7 +90,6 @@ const elements = {
 // ────────────────────────────────────────────────────────────────────────
 function initializeGame() {
   setupSocketListeners();
-  attemptReconnection();
   setupWindowListeners();
   initializeDominoCSS();
   ensureHandElements();
@@ -698,17 +706,34 @@ function setupSocketListeners() {
 function handleRoomJoined({ roomId, seat }) {
   gameState.roomId = roomId;
   gameState.mySeat = seat;
-  
+
   // Save to session storage for reconnection
   sessionStorage.setItem("domino_roomId", roomId);
   sessionStorage.setItem("domino_mySeat", seat);
-  
+
   // Update player info display
   if (elements.playerInfo) {
     const teamNumber = seat % 2 === 0 ? "0 & 2" : "1 & 3";
     elements.playerInfo.textContent = `You are Seat ${seat} (Team ${teamNumber})`;
   }
+
+  // ?? Rotate players so your hand is always on the bottom
+  const rotated = ['bottom', 'left', 'top', 'right'];
+
+for (let i = 0; i < 4; i++) {
+  const visualIndex = (i - seat + 4) % 4;
+  const position = rotated[visualIndex];
+
+  const handEl = document.getElementById(`hand${i}`);
+  const container = document.getElementById(`${position}Player`);
+
+  if (handEl && container) {
+    container.innerHTML = ''; // Clear old content
+    container.appendChild(handEl); // Insert correct hand in visual seat
+  }
 }
+
+
 
 function handleLobbyUpdate({ players }) {
   if (elements.lobbyContainer) {
