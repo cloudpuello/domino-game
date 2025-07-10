@@ -1,75 +1,72 @@
-/* =========================================================================
-   client.js — Dominican Domino front-end
-   ========================================================================= */
+/* =====================================================================
+ * client.js — Dominican Domino front-end (REWRITTEN)
+ * =================================================================== */
 
+/* ────────────────────────────────────────────────────────────────────────
+ * Constants
+ * ────────────────────────────────────────────────────────────────────── */
+const HIT_PADDING = 25;
+const ERROR_DISPLAY_TIME = 4000;
+const OPENING_TILE = [6, 6];
+const HAND_SIZE = 7;
+
+/* ────────────────────────────────────────────────────────────────────────
+ * Socket connection and player setup
+ * ────────────────────────────────────────────────────────────────────── */
 const socket = io();
 const playerName = prompt("Enter your name:") || "Anonymous";
 
-/* -------------------------------------------------------------------------- */
-/* State                                                                      */
-/* -------------------------------------------------------------------------- */
-let roomId      = null;
-let mySeat      = null;
-let currentTurn = null;
-let myHand      = [];
-let boardState  = [];
-let scores      = [0, 0];
-let seatMap     = {};
-let handSizes   = {};
-
-/* drag helper */
-let dragged = {
-  element:      null,
-  originalTile: null,
-  tileData:     null,
-  isDragging:   false,
-  hoveredSide:  null
+/* ────────────────────────────────────────────────────────────────────────
+ * Game state
+ * ────────────────────────────────────────────────────────────────────── */
+const gameState = {
+  roomId: null,
+  mySeat: null,
+  currentTurn: null,
+  myHand: [],
+  boardState: [],
+  scores: [0, 0],
+  seatMap: {},
+  handSizes: {}
 };
 
-/* -------------------------------------------------------------------------- */
-/* DOM handles                                                                */
-/* -------------------------------------------------------------------------- */
-const $          = id => document.getElementById(id);
-const statusEl   = $("status");
-const boardEl    = $("board");
-const handEl     = $("hand");
-const lobbyListEl= $("lobbyList");
-const lobbyContainerEl = $("lobbyContainer");
-const playerInfoEl= $("playerInfo");
-const errorsEl   = $("errors");
-const msgEl      = $("messages");
-const pipEl      = $("pipCounts");
-const topEl      = $("topPlayer");
-const leftEl     = $("leftPlayer");
-const rightEl    = $("rightPlayer");
-const team0ScoreEl = $("team0-score");
-const team1ScoreEl = $("team1-score");
+/* ────────────────────────────────────────────────────────────────────────
+ * Drag and drop state
+ * ────────────────────────────────────────────────────────────────────── */
+const dragState = {
+  element: null,
+  originalTile: null,
+  tileData: null,
+  isDragging: false,
+  hoveredSide: null
+};
 
-/* -------------------------------------------------------------------------- */
-/* Reconnect                                                                  */
-/* -------------------------------------------------------------------------- */
-socket.emit("findRoom", {
-  playerName,
-  roomId:        sessionStorage.getItem("domino_roomId"),
-  reconnectSeat: sessionStorage.getItem("domino_mySeat")
-});
+/* ────────────────────────────────────────────────────────────────────────
+ * DOM elements
+ * ────────────────────────────────────────────────────────────────────── */
+const $ = id => document.getElementById(id);
 
-/* -------------------------------------------------------------------------- */
-/* Helpers                                                                    */
-/* -------------------------------------------------------------------------- */
-const setStatus = t => (statusEl.textContent = t);
-const showError = t => { errorsEl.textContent = t; setTimeout(() => errorsEl.textContent = "", 4000); };
-const addMsg    = t => { const d = document.createElement("div"); d.textContent = t; msgEl.prepend(d); };
+const elements = {
+  status: $("status"),
+  board: $("board"),
+  hand: $("hand"),
+  lobbyList: $("lobbyList"),
+  lobbyContainer: $("lobbyContainer"),
+  playerInfo: $("playerInfo"),
+  errors: $("errors"),
+  messages: $("messages"),
+  pipCounts: $("pipCounts"),
+  topPlayer: $("topPlayer"),
+  leftPlayer: $("leftPlayer"),
+  rightPlayer: $("rightPlayer"),
+  team0Score: $("team0-score"),
+  team1Score: $("team1-score")
+};
 
-function adjustBoardCenter() {
-  boardEl.classList.toggle("board-center", boardEl.scrollWidth <= boardEl.clientWidth);
-}
-window.addEventListener("resize", adjustBoardCenter);
-
-/* -------------------------------------------------------------------------- */
-/* Pip layout look-up                                                         */
-/* -------------------------------------------------------------------------- */
-const pipLayouts = {
+/* ────────────────────────────────────────────────────────────────────────
+ * Pip layouts for domino rendering
+ * ────────────────────────────────────────────────────────────────────── */
+const PIP_LAYOUTS = {
   0: [],
   1: [[1, 1]],
   2: [[0, 0], [2, 2]],
@@ -79,303 +76,580 @@ const pipLayouts = {
   6: [[0, 0], [0, 2], [1, 0], [1, 2], [2, 0], [2, 2]]
 };
 
-function halfHTML(n) {
-  let html = '<div class="half">';
-  pipLayouts[n].forEach(([r, c]) => {
-    html += `<span class="pip" style="grid-area:${r + 1}/${c + 1}"></span>`;
+/* ────────────────────────────────────────────────────────────────────────
+ * Initialization and reconnection
+ * ────────────────────────────────────────────────────────────────────── */
+function initializeGame() {
+  setupSocketListeners();
+  attemptReconnection();
+  setupWindowListeners();
+}
+
+function attemptReconnection() {
+  socket.emit("findRoom", {
+    playerName,
+    roomId: sessionStorage.getItem("domino_roomId"),
+    reconnectSeat: sessionStorage.getItem("domino_mySeat")
   });
+}
+
+function setupWindowListeners() {
+  window.addEventListener("resize", adjustBoardCenter);
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+ * UI Helper functions
+ * ────────────────────────────────────────────────────────────────────── */
+function setStatus(text) {
+  elements.status.textContent = text;
+}
+
+function showError(text) {
+  elements.errors.textContent = text;
+  setTimeout(() => {
+    elements.errors.textContent = "";
+  }, ERROR_DISPLAY_TIME);
+}
+
+function addMessage(text) {
+  const messageDiv = document.createElement("div");
+  messageDiv.textContent = text;
+  elements.messages.prepend(messageDiv);
+}
+
+function adjustBoardCenter() {
+  const shouldCenter = elements.board.scrollWidth <= elements.board.clientWidth;
+  elements.board.classList.toggle("board-center", shouldCenter);
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+ * Domino tile rendering
+ * ────────────────────────────────────────────────────────────────────── */
+function createHalfHTML(pipCount) {
+  let html = '<div class="half">';
+  
+  PIP_LAYOUTS[pipCount].forEach(([row, col]) => {
+    html += `<span class="pip" style="grid-area:${row + 1}/${col + 1}"></span>`;
+  });
+  
   html += '</div>';
   return html;
 }
-const tileHTML = ([a, b]) => halfHTML(a) + '<div class="separator"></div>' + halfHTML(b);
 
-/* -------------------------------------------------------------------------- */
-/* Board & placeholders                                                       */
-/* -------------------------------------------------------------------------- */
+function createTileHTML([leftPips, rightPips]) {
+  return createHalfHTML(leftPips) + 
+         '<div class="separator"></div>' + 
+         createHalfHTML(rightPips);
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+ * Board rendering
+ * ────────────────────────────────────────────────────────────────────── */
 function renderPlaceholder() {
-  const ph = document.createElement("div");
-  ph.className = "tile-placeholder drop-target";
-  ph.dataset.side = "left";
-  ph.textContent = boardState.length === 0 ? "6|6" : "PLAY";
-  boardEl.appendChild(ph);
+  const placeholder = document.createElement("div");
+  placeholder.className = "tile-placeholder drop-target";
+  placeholder.dataset.side = "left";
+  placeholder.textContent = gameState.boardState.length === 0 ? "6|6" : "PLAY";
+  elements.board.appendChild(placeholder);
 }
 
 function renderBoard() {
-  boardEl.innerHTML = "";
-  if (boardState.length === 0) {
+  elements.board.innerHTML = "";
+  
+  if (gameState.boardState.length === 0) {
     renderPlaceholder();
   } else {
-    boardState.forEach(t => {
-      const dom = document.createElement("div");
-      dom.className = "tile disabled";
-      if (t[0] === t[1]) dom.classList.add("double");
-      dom.innerHTML = tileHTML(t);
-      boardEl.appendChild(dom);
+    gameState.boardState.forEach(tile => {
+      const tileElement = document.createElement("div");
+      tileElement.className = "tile disabled";
+      
+      if (tile[0] === tile[1]) {
+        tileElement.classList.add("double");
+      }
+      
+      tileElement.innerHTML = createTileHTML(tile);
+      elements.board.appendChild(tileElement);
     });
   }
+  
   adjustBoardCenter();
 }
 
-/* -------------------------------------------------------------------------- */
-/* Hand rendering                                                             */
-/* -------------------------------------------------------------------------- */
+/* ────────────────────────────────────────────────────────────────────────
+ * Game logic helpers
+ * ────────────────────────────────────────────────────────────────────── */
 function getBoardEnds() {
-  if (boardState.length === 0) return null;
+  if (gameState.boardState.length === 0) return null;
+  
   return {
-    leftTile:  boardEl.firstChild,
-    leftPip:   boardState[0][0],
-    rightTile: boardEl.lastChild,
-    rightPip:  boardState.at(-1)[1]
+    leftTile: elements.board.firstChild,
+    leftPip: gameState.boardState[0][0],
+    rightTile: elements.board.lastChild,
+    rightPip: gameState.boardState.at(-1)[1]
   };
 }
 
-/* FIXED opener logic – ignore scores; only board emptiness matters */
 function isTilePlayable([a, b], ends) {
-  const firstMove = boardState.length === 0;
-  if (firstMove) return a === 6 && b === 6;
+  const isFirstMove = gameState.boardState.length === 0;
+  
+  if (isFirstMove) {
+    return a === OPENING_TILE[0] && b === OPENING_TILE[1];
+  }
+  
   return ends && (
-    a === ends.leftPip  || b === ends.leftPip ||
+    a === ends.leftPip || b === ends.leftPip ||
     a === ends.rightPip || b === ends.rightPip
   );
 }
 
-function renderHand() {
-  handEl.innerHTML = "";
-  const ends = getBoardEnds();
-  myHand.forEach(tile => {
-    const d = document.createElement("div");
-    d.className = "tile";
-    d.innerHTML = tileHTML(tile);
+function isMyTurn() {
+  return gameState.currentTurn === gameState.mySeat;
+}
 
-    const playable = isTilePlayable(tile, ends);
-    if (currentTurn === mySeat && playable) {
-      d.classList.add("playable");
-      d.addEventListener("mousedown", e => handleDragStart(e, tile, d));
-      d.addEventListener("touchstart", e => handleDragStart(e, tile, d), { passive: false });
-      d.addEventListener("dragstart", e => e.preventDefault());
-    } else {
-      d.classList.add("disabled");
-    }
-    handEl.appendChild(d);
+/* ────────────────────────────────────────────────────────────────────────
+ * Hand rendering
+ * ────────────────────────────────────────────────────────────────────── */
+function renderHand() {
+  elements.hand.innerHTML = "";
+  const ends = getBoardEnds();
+  
+  gameState.myHand.forEach(tile => {
+    const tileElement = createHandTileElement(tile, ends);
+    elements.hand.appendChild(tileElement);
   });
 }
 
-/* -------------------------------------------------------------------------- */
-/* Drag helpers (unchanged)                                                   */
-/* -------------------------------------------------------------------------- */
-const HIT_PADDING = 25;
-const getPos = e => e.touches ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : { x: e.clientX, y: e.clientY };
-const insideExpand = (p, r) =>
-  p.x > r.left - HIT_PADDING && p.x < r.right + HIT_PADDING &&
-  p.y > r.top  - HIT_PADDING && p.y < r.bottom + HIT_PADDING;
+function createHandTileElement(tile, ends) {
+  const tileElement = document.createElement("div");
+  tileElement.className = "tile";
+  tileElement.innerHTML = createTileHTML(tile);
+  
+  const playable = isTilePlayable(tile, ends);
+  
+  if (isMyTurn() && playable) {
+    makePlayableTile(tileElement, tile);
+  } else {
+    tileElement.classList.add("disabled");
+  }
+  
+  return tileElement;
+}
 
-function markEnds([a, b]) {
-  const e = getBoardEnds();
-  if (!e) return;
-  if (a === e.leftPip  || b === e.leftPip)  { e.leftTile.classList.add("drop-target");  e.leftTile.dataset.side  = "left"; }
-  if (a === e.rightPip || b === e.rightPip) { e.rightTile.classList.add("drop-target"); e.rightTile.dataset.side = "right"; }
+function makePlayableTile(tileElement, tile) {
+  tileElement.classList.add("playable");
+  tileElement.addEventListener("mousedown", e => startDrag(e, tile, tileElement));
+  tileElement.addEventListener("touchstart", e => startDrag(e, tile, tileElement), { passive: false });
+  tileElement.addEventListener("dragstart", e => e.preventDefault());
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+ * Drag and drop functionality
+ * ────────────────────────────────────────────────────────────────────── */
+function getEventPosition(event) {
+  if (event.touches) {
+    return { x: event.touches[0].clientX, y: event.touches[0].clientY };
+  }
+  return { x: event.clientX, y: event.clientY };
+}
+
+function isPositionInExpandedRect(position, rect) {
+  return position.x > rect.left - HIT_PADDING && 
+         position.x < rect.right + HIT_PADDING &&
+         position.y > rect.top - HIT_PADDING && 
+         position.y < rect.bottom + HIT_PADDING;
+}
+
+function markValidDropTargets([a, b]) {
+  const ends = getBoardEnds();
+  if (!ends) return;
+  
+  if (a === ends.leftPip || b === ends.leftPip) {
+    ends.leftTile.classList.add("drop-target");
+    ends.leftTile.dataset.side = "left";
+  }
+  
+  if (a === ends.rightPip || b === ends.rightPip) {
+    ends.rightTile.classList.add("drop-target");
+    ends.rightTile.dataset.side = "right";
+  }
 }
 
 function cleanupDrag() {
-  if (dragged.element) dragged.element.remove();
-  document.querySelectorAll(".drop-target").forEach(el => {
-    el.classList.remove("drop-target", "drop-hover");
-    el.removeAttribute("data-side");
+  // Remove dragged element
+  if (dragState.element) {
+    dragState.element.remove();
+  }
+  
+  // Remove drop targets and hover states
+  document.querySelectorAll(".drop-target").forEach(element => {
+    element.classList.remove("drop-target", "drop-hover");
+    element.removeAttribute("data-side");
   });
-  if (dragged.originalTile) dragged.originalTile.classList.remove("ghost");
-  document.removeEventListener("mousemove", move);
-  document.removeEventListener("mouseup", end);
-  document.removeEventListener("touchmove", move);
-  document.removeEventListener("touchend", end);
-  dragged = { element: null, originalTile: null, tileData: null, isDragging: false, hoveredSide: null };
+  
+  // Remove ghost state from original tile
+  if (dragState.originalTile) {
+    dragState.originalTile.classList.remove("ghost");
+  }
+  
+  // Remove event listeners
+  document.removeEventListener("mousemove", handleDragMove);
+  document.removeEventListener("mouseup", handleDragEnd);
+  document.removeEventListener("touchmove", handleDragMove);
+  document.removeEventListener("touchend", handleDragEnd);
+  
+  // Reset drag state
+  Object.assign(dragState, {
+    element: null,
+    originalTile: null,
+    tileData: null,
+    isDragging: false,
+    hoveredSide: null
+  });
 }
 
-function start(e, tile, tEl) {
-  if (e.type === "touchstart") e.preventDefault();
-  if (dragged.isDragging) return;
-
-  dragged = { tileData: tile, originalTile: tEl, isDragging: true, hoveredSide: null };
-  dragged.element = tEl.cloneNode(true);
-  dragged.element.classList.add("dragging");
-  document.body.appendChild(dragged.element);
-  tEl.classList.add("ghost");
-
-  markEnds(tile);
-
-  const p = getPos(e);
-  dragged.element.style.left = p.x + "px";
-  dragged.element.style.top  = p.y + "px";
-
-  document.addEventListener("mousemove", move);
-  document.addEventListener("mouseup", end);
-  document.addEventListener("touchmove", move, { passive: false });
-  document.addEventListener("touchend", end);
+function startDrag(event, tile, tileElement) {
+  if (event.type === "touchstart") {
+    event.preventDefault();
+  }
+  
+  if (dragState.isDragging) return;
+  
+  // Set up drag state
+  Object.assign(dragState, {
+    tileData: tile,
+    originalTile: tileElement,
+    isDragging: true,
+    hoveredSide: null
+  });
+  
+  // Create dragged element
+  dragState.element = tileElement.cloneNode(true);
+  dragState.element.classList.add("dragging");
+  document.body.appendChild(dragState.element);
+  
+  // Mark original tile as ghost
+  tileElement.classList.add("ghost");
+  
+  // Mark valid drop targets
+  markValidDropTargets(tile);
+  
+  // Position dragged element
+  const position = getEventPosition(event);
+  dragState.element.style.left = position.x + "px";
+  dragState.element.style.top = position.y + "px";
+  
+  // Add event listeners
+  document.addEventListener("mousemove", handleDragMove);
+  document.addEventListener("mouseup", handleDragEnd);
+  document.addEventListener("touchmove", handleDragMove, { passive: false });
+  document.addEventListener("touchend", handleDragEnd);
 }
 
-function move(e) {
-  if (!dragged.isDragging) return;
-  e.preventDefault();
-  const p = getPos(e);
-  dragged.element.style.left = p.x + "px";
-  dragged.element.style.top  = p.y + "px";
-
-  let ok = false;
-  document.querySelectorAll(".drop-target").forEach(t => {
-    const r = t.getBoundingClientRect();
-    if (insideExpand(p, r)) {
-      ok = true;
-      dragged.hoveredSide = t.dataset.side;
-      t.classList.add("drop-hover");
+function handleDragMove(event) {
+  if (!dragState.isDragging) return;
+  
+  event.preventDefault();
+  const position = getEventPosition(event);
+  
+  // Update dragged element position
+  dragState.element.style.left = position.x + "px";
+  dragState.element.style.top = position.y + "px";
+  
+  // Check for valid drop targets
+  let foundValidTarget = false;
+  
+  document.querySelectorAll(".drop-target").forEach(target => {
+    const rect = target.getBoundingClientRect();
+    
+    if (isPositionInExpandedRect(position, rect)) {
+      foundValidTarget = true;
+      dragState.hoveredSide = target.dataset.side;
+      target.classList.add("drop-hover");
     } else {
-      t.classList.remove("drop-hover");
+      target.classList.remove("drop-hover");
     }
   });
-  if (!ok) dragged.hoveredSide = null;
+  
+  if (!foundValidTarget) {
+    dragState.hoveredSide = null;
+  }
 }
 
-function end() {
-  if (!dragged.isDragging) return;
-  const side = dragged.hoveredSide || (boardState.length === 0 ? "left" : null);
-  if (side) socket.emit("playTile", { roomId, seat: mySeat, tile: dragged.tileData, side });
-  else dragged.originalTile.classList.remove("ghost");
+function handleDragEnd() {
+  if (!dragState.isDragging) return;
+  
+  const side = dragState.hoveredSide || 
+               (gameState.boardState.length === 0 ? "left" : null);
+  
+  if (side) {
+    // Valid drop - send tile play to server
+    socket.emit("playTile", {
+      roomId: gameState.roomId,
+      seat: gameState.mySeat,
+      tile: dragState.tileData,
+      side
+    });
+  } else {
+    // Invalid drop - restore original tile
+    dragState.originalTile.classList.remove("ghost");
+  }
+  
   cleanupDrag();
 }
 
-/* -------------------------------------------------------------------------- */
-/* Graphics helpers                                                           */
-/* -------------------------------------------------------------------------- */
-function seatPos(s) {
-  if (s === mySeat) return "self";
-  const d = (s - mySeat + 4) % 4;
-  return d === 1 ? "right" : d === 2 ? "top" : "left";
+/* ────────────────────────────────────────────────────────────────────────
+ * Player position and opponent rendering
+ * ────────────────────────────────────────────────────────────────────── */
+function getRelativePlayerPosition(seat) {
+  if (seat === gameState.mySeat) return "self";
+  
+  const difference = (seat - gameState.mySeat + 4) % 4;
+  switch (difference) {
+    case 1: return "right";
+    case 2: return "top";
+    case 3: return "left";
+    default: return "self";
+  }
 }
 
 function renderOpponents() {
-  const areas = { top: topEl, left: leftEl, right: rightEl };
-  Object.values(areas).forEach(el => el.innerHTML = "");
-  Object.entries(seatMap).forEach(([s, info]) => {
-    s = +s;
-    if (s === mySeat) return;
-    const a = areas[seatPos(s)];
-    if (!a) return;
-    const n = document.createElement("div");
-    n.textContent = `${info.name} (Seat ${s})`;
-    a.appendChild(n);
-    const hd = document.createElement("div");
-    hd.className = "player-area-hand-display";
-    const cnt = handSizes[s] || 0;
-    for (let i = 0; i < cnt; i++) {
-      const d = document.createElement("div");
-      d.className = "dummy-tile";
-      hd.appendChild(d);
-    }
-    a.appendChild(hd);
+  const playerAreas = {
+    top: elements.topPlayer,
+    left: elements.leftPlayer,
+    right: elements.rightPlayer
+  };
+  
+  // Clear all player areas
+  Object.values(playerAreas).forEach(area => {
+    area.innerHTML = "";
+  });
+  
+  // Render each opponent
+  Object.entries(gameState.seatMap).forEach(([seat, playerInfo]) => {
+    const seatNumber = Number(seat);
+    if (seatNumber === gameState.mySeat) return;
+    
+    const position = getRelativePlayerPosition(seatNumber);
+    const area = playerAreas[position];
+    if (!area) return;
+    
+    renderPlayerInArea(area, playerInfo, seatNumber);
   });
 }
 
-const renderScores = () => {
-  team0ScoreEl.textContent = scores[0];
-  team1ScoreEl.textContent = scores[1];
-};
+function renderPlayerInArea(area, playerInfo, seat) {
+  // Player name
+  const nameElement = document.createElement("div");
+  nameElement.textContent = `${playerInfo.name} (Seat ${seat})`;
+  area.appendChild(nameElement);
+  
+  // Player's hand display
+  const handDisplay = document.createElement("div");
+  handDisplay.className = "player-area-hand-display";
+  
+  const tileCount = gameState.handSizes[seat] || 0;
+  for (let i = 0; i < tileCount; i++) {
+    const dummyTile = document.createElement("div");
+    dummyTile.className = "dummy-tile";
+    handDisplay.appendChild(dummyTile);
+  }
+  
+  area.appendChild(handDisplay);
+}
 
-const renderPips = c => {
-  pipEl.textContent = c ? Object.entries(c).map(([p, n]) => `${p}:${n}`).join(" | ") : "";
-};
+/* ────────────────────────────────────────────────────────────────────────
+ * Score and pip count rendering
+ * ────────────────────────────────────────────────────────────────────── */
+function renderScores() {
+  elements.team0Score.textContent = gameState.scores[0];
+  elements.team1Score.textContent = gameState.scores[1];
+}
 
-/* -------------------------------------------------------------------------- */
-/* Socket events                                                              */
-/* -------------------------------------------------------------------------- */
-socket.on("roomJoined", ({ roomId: id, seat }) => {
-  roomId = id;
-  mySeat = seat;
+function renderPipCounts(pipCounts) {
+  if (!pipCounts) {
+    elements.pipCounts.textContent = "";
+    return;
+  }
+  
+  const pipCountText = Object.entries(pipCounts)
+    .map(([pip, count]) => `${pip}:${count}`)
+    .join(" | ");
+  
+  elements.pipCounts.textContent = pipCountText;
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+ * Turn indicator management
+ * ────────────────────────────────────────────────────────────────────── */
+function updateTurnIndicators(currentTurn) {
+  // Remove indicators from all areas
+  const allAreas = [elements.topPlayer, elements.leftPlayer, elements.rightPlayer, elements.hand];
+  allAreas.forEach(area => area.classList.remove("active-turn-indicator"));
+  
+  // Add indicator to current player's area
+  const position = getRelativePlayerPosition(currentTurn);
+  const areaMap = {
+    top: elements.topPlayer,
+    left: elements.leftPlayer,
+    right: elements.rightPlayer,
+    self: elements.hand
+  };
+  
+  const activeArea = areaMap[position];
+  if (activeArea) {
+    activeArea.classList.add("active-turn-indicator");
+  }
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+ * Socket event handlers
+ * ────────────────────────────────────────────────────────────────────── */
+function setupSocketListeners() {
+  socket.on("roomJoined", handleRoomJoined);
+  socket.on("lobbyUpdate", handleLobbyUpdate);
+  socket.on("roundStart", handleRoundStart);
+  socket.on("updateHand", handleHandUpdate);
+  socket.on("broadcastMove", handleMoveUpdate);
+  socket.on("turnChanged", handleTurnChange);
+  socket.on("playerPassed", handlePlayerPassed);
+  socket.on("roundEnded", handleRoundEnd);
+  socket.on("gameOver", handleGameOver);
+  socket.on("reconnectSuccess", handleReconnectSuccess);
+  socket.on("errorMessage", showError);
+  socket.on("bonusAwarded", handleBonusAwarded);
+}
+
+function handleRoomJoined({ roomId, seat }) {
+  gameState.roomId = roomId;
+  gameState.mySeat = seat;
+  
+  // Save to session storage for reconnection
   sessionStorage.setItem("domino_roomId", roomId);
-  sessionStorage.setItem("domino_mySeat", mySeat);
-  playerInfoEl.textContent = `You are Seat ${seat} (Team ${seat % 2 === 0 ? "0 & 2" : "1 & 3"})`;
-});
+  sessionStorage.setItem("domino_mySeat", seat);
+  
+  // Update player info display
+  const teamNumber = seat % 2 === 0 ? "0 & 2" : "1 & 3";
+  elements.playerInfo.textContent = `You are Seat ${seat} (Team ${teamNumber})`;
+}
 
-socket.on("lobbyUpdate", ({ players }) => {
-  lobbyContainerEl.style.display = "block";
-  seatMap = Object.fromEntries(players.map(p => [p.seat, p]));
-  lobbyListEl.innerHTML = "";
-  players.forEach(p => {
-    const li = document.createElement("li");
-    li.textContent = `Seat ${p.seat}: ${p.name}`;
-    lobbyListEl.appendChild(li);
+function handleLobbyUpdate({ players }) {
+  elements.lobbyContainer.style.display = "block";
+  
+  // Update seat map
+  gameState.seatMap = Object.fromEntries(
+    players.map(player => [player.seat, player])
+  );
+  
+  // Update lobby list
+  elements.lobbyList.innerHTML = "";
+  players.forEach(player => {
+    const listItem = document.createElement("li");
+    listItem.textContent = `Seat ${player.seat}: ${player.name}`;
+    elements.lobbyList.appendChild(listItem);
   });
-});
+}
 
-socket.on("roundStart", ({ yourHand, startingSeat, scores: s }) => {
-  lobbyContainerEl.style.display = "none";
-  myHand = yourHand;
-  boardState = [];
-  scores = s;
-  currentTurn = startingSeat;
-  msgEl.innerHTML = "";
-  handSizes = { 0: 7, 1: 7, 2: 7, 3: 7 };
+function handleRoundStart({ yourHand, startingSeat, scores }) {
+  elements.lobbyContainer.style.display = "none";
+  
+  // Update game state
+  gameState.myHand = yourHand;
+  gameState.boardState = [];
+  gameState.scores = scores;
+  gameState.currentTurn = startingSeat;
+  gameState.handSizes = { 0: HAND_SIZE, 1: HAND_SIZE, 2: HAND_SIZE, 3: HAND_SIZE };
+  
+  // Clear messages and cleanup
+  elements.messages.innerHTML = "";
   cleanupDrag();
+  
+  // Render everything
   renderScores();
   renderBoard();
   renderHand();
   renderOpponents();
-  setStatus(currentTurn === mySeat ? "Your turn!" : `Waiting for seat ${currentTurn}`);
-});
+  
+  // Update status
+  const statusText = gameState.currentTurn === gameState.mySeat ? 
+    "Your turn!" : 
+    `Waiting for seat ${gameState.currentTurn}`;
+  setStatus(statusText);
+}
 
-socket.on("updateHand", h => {
-  myHand = h;
-  handSizes[mySeat] = h.length;
+function handleHandUpdate(newHand) {
+  gameState.myHand = newHand;
+  gameState.handSizes[gameState.mySeat] = newHand.length;
   renderHand();
   renderOpponents();
-});
+}
 
-socket.on("broadcastMove", ({ seat, tile, board, pipCounts }) => {
-  boardState = board;
-  if (seat !== mySeat) handSizes[seat]--;
+function handleMoveUpdate({ seat, tile, board, pipCounts }) {
+  gameState.boardState = board;
+  
+  // Update hand size for other players
+  if (seat !== gameState.mySeat) {
+    gameState.handSizes[seat]--;
+  }
+  
   cleanupDrag();
   renderBoard();
-  renderPips(pipCounts);
+  renderPipCounts(pipCounts);
   renderOpponents();
-  addMsg(`${seat} played ${tile[0]}|${tile[1]}.`);
-});
+  
+  addMessage(`${seat} played ${tile[0]}|${tile[1]}.`);
+}
 
-socket.on("turnChanged", turn => {
-  currentTurn = turn;
-  setStatus(turn === mySeat ? "Your turn!" : `Waiting for seat ${turn}`);
+function handleTurnChange(turn) {
+  gameState.currentTurn = turn;
+  
+  const statusText = turn === gameState.mySeat ? 
+    "Your turn!" : 
+    `Waiting for seat ${turn}`;
+  setStatus(statusText);
+  
   cleanupDrag();
   renderHand();
-  [topEl, leftEl, rightEl, handEl].forEach(el => el.classList.remove("active-turn-indicator"));
-  const pos = seatPos(turn);
-  (pos === "top" ? topEl : pos === "left" ? leftEl : pos === "right" ? rightEl : handEl)
-    .classList.add("active-turn-indicator");
-});
+  updateTurnIndicators(turn);
+}
 
-socket.on("playerPassed", ({ seat }) => addMsg(`Seat ${seat} passed.`));
+function handlePlayerPassed({ seat }) {
+  addMessage(`Seat ${seat} passed.`);
+}
 
-socket.on("roundEnded", ({ winner, reason, points, scores: s, board }) => {
-  boardState = board;
-  scores = s;
+function handleRoundEnd({ winner, reason, points, scores, board }) {
+  gameState.boardState = board;
+  gameState.scores = scores;
+  
   cleanupDrag();
   renderScores();
   renderBoard();
-  setStatus(`Seat ${winner} wins (${reason}) +${points} pts.`);
-  addMsg(`Seat ${winner} wins (${reason}) +${points} pts.`);
-});
+  
+  const statusText = `Seat ${winner} wins (${reason}) +${points} pts.`;
+  setStatus(statusText);
+  addMessage(statusText);
+}
 
-socket.on("gameOver", ({ winningTeam, scores: s }) => {
+function handleGameOver({ winningTeam, scores }) {
+  // Clear session storage
   sessionStorage.removeItem("domino_roomId");
   sessionStorage.removeItem("domino_mySeat");
-  alert(`Game over! Team ${winningTeam} wins.\nScores: ${s.join(" / ")}`);
+  
+  // Show game over message
+  alert(`Game over! Team ${winningTeam} wins.\\nScores: ${scores.join(" / ")}`);
   setStatus("Game over.");
-});
+}
 
-socket.on("reconnectSuccess", () => console.log("Reconnected"));
-socket.on("errorMessage", showError);
-socket.on("bonusAwarded", ({ seat, type, points, scores: s }) => {
-  scores = s;
+function handleReconnectSuccess() {
+  console.log("Successfully reconnected to game");
+}
+
+function handleBonusAwarded({ seat, type, points, scores }) {
+  gameState.scores = scores;
   renderScores();
-  addMsg(`Team ${seat % 2} gets +${points} pts for ${type}!`);
-});
+  addMessage(`Team ${seat % 2} gets +${points} pts for ${type}!`);
+}
 
-/* -------------------------------------------------------------------------- */
-/* Event bindings                                                             */
-/* -------------------------------------------------------------------------- */
-function handleDragStart(e, tile, tEl) { start(e, tile, tEl); }
+/* ────────────────────────────────────────────────────────────────────────
+ * Initialize the game when page loads
+ * ────────────────────────────────────────────────────────────────────── */
+initializeGame();

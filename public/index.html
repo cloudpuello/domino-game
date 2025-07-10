@@ -1,62 +1,97 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8" />
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Dominican Domino - Real-time multiplayer domino game">
     <title>Dominican Domino</title>
-    <link rel="stylesheet" href="css/style.css">
     
+    <!-- Preconnect for performance -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    
+    <!-- Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+    
+    <!-- Styles -->
+    <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+    <!-- Main game container -->
     <div class="game-container">
-        <div class="info-panel">
-            <div class="info-section">
+        
+        <!-- Left sidebar with game information -->
+        <aside class="info-panel" role="complementary">
+            
+            <!-- Game title and player info -->
+            <section class="info-section">
                 <h1>Dominican Domino</h1>
-                <p id="playerInfo">Connecting...</p>
-                <div id="errors"></div>
-            </div>
-            <div class="info-section">
+                <p id="playerInfo" aria-live="polite">Connecting...</p>
+                <div id="errors" class="error-display" aria-live="assertive" role="alert"></div>
+            </section>
+            
+            <!-- Current game status -->
+            <section class="info-section">
                 <h3>Status</h3>
-                <p id="status">Waiting for players...</p>
-            </div>
-            <div class="info-section">
+                <p id="status" aria-live="polite">Waiting for players...</p>
+            </section>
+            
+            <!-- Team scores -->
+            <section class="info-section">
                 <h3>Scores</h3>
                 <div class="score-display">
-                    <div class="score-box your-team-color">
+                    <div class="score-box your-team-color" aria-label="Your team score">
                         <span>Team 0 & 2</span>
                         <strong id="team0-score">0</strong>
                     </div>
-                    <div class="score-box opponent-team-color">
+                    <div class="score-box opponent-team-color" aria-label="Opponent team score">
                         <span>Team 1 & 3</span>
                         <strong id="team1-score">0</strong>
                     </div>
                 </div>
-            </div>
-            <div class="info-section">
+            </section>
+            
+            <!-- Pip count tracking -->
+            <section class="info-section">
                 <h3>Pip Counts</h3>
-                <p id="pipCounts">-</p>
-            </div>
-            <div class="info-section" style="display:none;" id="lobbyContainer">
+                <p id="pipCounts" aria-live="polite">-</p>
+            </section>
+            
+            <!-- Lobby player list (hidden during gameplay) -->
+            <section class="info-section" id="lobbyContainer" style="display:none;" aria-label="Player lobby">
                 <h3>Lobby</h3>
-                <ul id="lobbyList"></ul>
-            </div>
-            <div class="info-section">
+                <ul id="lobbyList" role="list"></ul>
+            </section>
+            
+            <!-- Game event messages -->
+            <section class="info-section">
                 <h3>Game Events</h3>
-                <div id="messages"></div>
-            </div>
-        </div>
+                <div id="messages" class="message-log" aria-live="polite" role="log"></div>
+            </section>
+        </aside>
 
-        <div class="game-table">
-            <div id="topPlayer" class="player-area"></div>
-            <div id="leftPlayer" class="player-area"></div>
-            <div id="board"></div>
-            <div id="rightPlayer" class="player-area"></div>
-            <div id="hand" class="player-area player-area-hand-display drop-target"></div>
-        </div>
+        <!-- Main game table area -->
+        <main class="game-table" role="main">
+            
+            <!-- Top opponent -->
+            <div id="topPlayer" class="player-area" aria-label="Top player area"></div>
+            
+            <!-- Left opponent -->
+            <div id="leftPlayer" class="player-area" aria-label="Left player area"></div>
+            
+            <!-- Game board (center) -->
+            <div id="board" class="game-board" role="img" aria-label="Domino game board"></div>
+            
+            <!-- Right opponent -->
+            <div id="rightPlayer" class="player-area" aria-label="Right player area"></div>
+            
+            <!-- Your hand (bottom) -->
+            <div id="hand" class="player-area player-area-hand-display drop-target" 
+                 role="group" aria-label="Your domino hand" tabindex="0"></div>
+        </main>
     </div>
+
+    <!-- Scripts -->
     <script src="/socket.io/socket.io.js"></script>
     <script src="client.js"></script>
 </body>
