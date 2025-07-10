@@ -15,7 +15,7 @@ import {
   DOMINO_GAP,
   HAND_DOMINO_WIDTH,
   HAND_DOMINO_HEIGHT 
-} from '/shared/constants/gameConstants.js';
+} from '../shared/constants/gameConstants.js';
 
 /* ────────────────────────────────────────────────────────────────────────
  * Socket connection and player setup
