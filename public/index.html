@@ -74,34 +74,36 @@
         <main class="game-table" role="main">
             
             <!-- Top player (Seat 0) -->
-            <div class="player-area" id="topPlayer" aria-label="Top player area">
+            <div class="player-area top" id="topPlayer" aria-label="Top player area">
                 <div class="player-name">Player 1 (Seat 0)</div>
                 <div id="hand0" class="player-hand-container" aria-label="Top player hand"></div>
             </div>
             
             <!-- Left player (Seat 1) -->
-            <div class="player-area" id="leftPlayer" aria-label="Left player area">
+            <div class="player-area left" id="leftPlayer" aria-label="Left player area">
                 <div class="player-name">Player 2 (Seat 1)</div>
                 <div id="hand1" class="player-hand-container" aria-label="Left player hand"></div>
             </div>
             
-            <!-- Game board (center) -->
-            <div id="board" class="game-board" role="img" aria-label="Domino game board"></div>
+            <!-- Game board (center) - with overflow handling for snake formation -->
+            <div id="board" class="game-board" role="img" aria-label="Domino game board">
+                <!-- Dominoes will be dynamically inserted here -->
+            </div>
             
             <!-- Right player (Seat 3) -->
-            <div class="player-area" id="rightPlayer" aria-label="Right player area">
+            <div class="player-area right" id="rightPlayer" aria-label="Right player area">
                 <div class="player-name">Player 4 (Seat 3)</div>
                 <div id="hand3" class="player-hand-container" aria-label="Right player hand"></div>
             </div>
             
             <!-- Bottom player (Seat 2 - Your hand) -->
-            <div class="player-area" id="bottomPlayer" aria-label="Your player area">
+            <div class="player-area bottom" id="bottomPlayer" aria-label="Your player area">
                 <div class="player-name">Your Hand (Seat 2)</div>
-                <div id="hand2" class="player-hand-container current-player" 
+                <div id="hand2" class="player-hand-container" 
                      role="group" aria-label="Your domino hand" tabindex="0"></div>
             </div>
             
-            <!-- Legacy hand element for compatibility -->
+            <!-- Legacy hand element for backward compatibility -->
             <div id="hand" style="display: none;"></div>
         </main>
     </div>
