@@ -1,5 +1,6 @@
 /* =====================================================================
- * style.css — Dominican Domino Game - Professional Theme
+ * style.css — Dominican Domino Game - Professional Theme (UPDATED)
+ * Compatible with fixed client.js structure
  * =================================================================== */
 
 /* ────────────────────────────────────────────────────────────────────────
@@ -186,7 +187,7 @@ body {
   box-shadow: var(--shadow-sm);
 }
 
-.error-display {
+.error-display, #errors {
   color: var(--error);
   font-weight: 600;
   text-align: center;
@@ -198,7 +199,7 @@ body {
   transition: all var(--transition-normal);
 }
 
-.message-log {
+.message-log, #messages {
   max-height: 200px;
   overflow-y: auto;
   font-size: 0.9rem;
@@ -207,13 +208,13 @@ body {
   padding: var(--space-sm);
 }
 
-.message-log > div {
+.message-log > div, #messages > div {
   padding: var(--space-xs) 0;
   border-bottom: 1px solid #e9ecef;
   animation: slideIn 0.3s ease-out;
 }
 
-.message-log > div:last-child {
+.message-log > div:last-child, #messages > div:last-child {
   border-bottom: none;
 }
 
@@ -309,7 +310,7 @@ body {
 }
 
 /* ────────────────────────────────────────────────────────────────────────
- * Player Areas
+ * Player Areas - Updated for new structure
  * ────────────────────────────────────────────────────────────────────── */
 .player-area {
   color: var(--text-light);
@@ -353,6 +354,30 @@ body {
   border: 2px solid rgba(212, 175, 55, 0.5);
 }
 
+/* New hand containers for fixed structure */
+.player-hand-container, #hand0, #hand1, #hand2, #hand3 {
+  min-height: 80px;
+  padding: 10px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.1);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  border: 2px solid transparent;
+  transition: all 0.3s ease;
+}
+
+.player-hand-container.current-player, 
+#hand0.current-player, 
+#hand1.current-player, 
+#hand2.current-player, 
+#hand3.current-player {
+  border-color: #ffd700;
+  background: rgba(255,215,0,0.2);
+  box-shadow: 0 0 15px rgba(255,215,0,0.5);
+}
+
 .player-area-hand-display {
   display: flex;
   flex-wrap: wrap;
@@ -386,35 +411,31 @@ body {
 }
 
 /* ────────────────────────────────────────────────────────────────────────
- * Game Board
+ * Game Board - Updated for snake formation
  * ────────────────────────────────────────────────────────────────────── */
-.game-board {
+.game-board, #board {
   grid-area: board;
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  justify-content: flex-start;
+  position: relative;
   background: 
     radial-gradient(circle at center, rgba(255,255,255,0.1) 0%, transparent 70%),
     rgba(0,0,0,0.2);
   border-radius: var(--radius-lg);
   padding: var(--space-lg);
-  overflow-x: auto;
-  overflow-y: hidden;
-  flex-wrap: nowrap;
-  min-height: 120px;
+  overflow: visible;
+  min-height: 400px;
   border: 2px solid rgba(255,255,255,0.1);
   box-shadow: 
     inset 0 4px 8px rgba(0,0,0,0.3),
     var(--shadow-md);
-  position: relative;
 }
 
-.game-board.board-center {
+.game-board.board-center, #board.board-center {
+  display: flex;
   justify-content: center;
+  align-items: center;
 }
 
-.game-board::before {
+.game-board::before, #board::before {
   content: "";
   position: absolute;
   inset: 8px;
@@ -423,28 +444,101 @@ body {
   pointer-events: none;
 }
 
-/* Custom scrollbar for board */
-.game-board::-webkit-scrollbar {
-  height: 8px;
+/* ────────────────────────────────────────────────────────────────────────
+ * Board Dominoes - Portrait orientation with snake formation
+ * ────────────────────────────────────────────────────────────────────── */
+.board-domino {
+  position: absolute;
+  width: 40px;
+  height: 80px;
+  background: linear-gradient(135deg, 
+    #ffffff 0%, 
+    #f8f9fa 25%, 
+    #f1f3f4 50%, 
+    #e8eaed 75%, 
+    #f8f9fa 100%);
+  border: 2px solid #333;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  z-index: 10;
+  box-shadow: 0 3px 6px rgba(0,0,0,0.3);
+  transition: all 0.3s ease;
 }
 
-.game-board::-webkit-scrollbar-track {
-  background: rgba(0,0,0,0.2);
-  border-radius: 4px;
-}
-
-.game-board::-webkit-scrollbar-thumb {
-  background: rgba(212, 175, 55, 0.6);
-  border-radius: 4px;
-  border: 1px solid rgba(255,255,255,0.2);
-}
-
-.game-board::-webkit-scrollbar-thumb:hover {
-  background: rgba(212, 175, 55, 0.8);
+.board-domino:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.4);
 }
 
 /* ────────────────────────────────────────────────────────────────────────
- * Domino Tiles
+ * Hand Dominoes - Portrait orientation
+ * ────────────────────────────────────────────────────────────────────── */
+.hand-domino {
+  width: 30px;
+  height: 60px;
+  background: linear-gradient(135deg, 
+    #ffffff 0%, 
+    #f8f9fa 25%, 
+    #f1f3f4 50%, 
+    #e8eaed 75%, 
+    #f8f9fa 100%);
+  border: 1px solid #333;
+  border-radius: 4px;
+  margin: 2px;
+  display: inline-flex;
+  flex-direction: column;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.hand-domino:hover {
+  transform: scale(1.1) translateY(-3px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+  background: linear-gradient(135deg, #f0f0f0 0%, #e8e8e8 100%);
+}
+
+.hand-domino.dummy {
+  background: linear-gradient(135deg, 
+    #4a5568 0%, 
+    #2d3748 50%, 
+    #1a202c 100%);
+  border: 1px solid #2d3748;
+  cursor: default;
+}
+
+.hand-domino.dummy:hover {
+  transform: none;
+  background: linear-gradient(135deg, 
+    #4a5568 0%, 
+    #2d3748 50%, 
+    #1a202c 100%);
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+ * Domino Sections (Top and Bottom)
+ * ────────────────────────────────────────────────────────────────────── */
+.domino-section {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  color: #333;
+  font-size: 14px;
+}
+
+.domino-section.top {
+  border-bottom: 1px solid #333;
+}
+
+.hand-domino .domino-section {
+  font-size: 10px;
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+ * Legacy Tile Styles (for compatibility)
  * ────────────────────────────────────────────────────────────────────── */
 .tile {
   display: flex;
@@ -536,18 +630,18 @@ body {
   transition: transform var(--transition-slow);
 }
 
-.tile.disabled {
+.tile.disabled, .hand-domino.disabled {
   opacity: 0.6;
   cursor: default;
   filter: grayscale(0.3);
 }
 
-.tile.ghost {
+.tile.ghost, .hand-domino.ghost {
   opacity: 0.3;
   transform: scale(0.95);
 }
 
-.tile.playable {
+.tile.playable, .hand-domino.playable {
   cursor: grab;
   border-color: var(--accent-gold);
   box-shadow: 
@@ -557,7 +651,7 @@ body {
     inset 0 -1px 2px rgba(0,0,0,0.1);
 }
 
-.tile.playable:hover {
+.tile.playable:hover, .hand-domino.playable:hover {
   transform: translateY(-3px) scale(1.02);
   border-color: var(--accent-light);
   box-shadow: 
@@ -568,7 +662,7 @@ body {
     inset 0 -1px 2px rgba(0,0,0,0.1);
 }
 
-.tile.dragging {
+.tile.dragging, .hand-domino.dragging, .domino-dragging {
   position: fixed;
   z-index: 1000;
   pointer-events: none;
@@ -623,7 +717,7 @@ body {
  * Drop Zones and Placeholders
  * ────────────────────────────────────────────────────────────────────── */
 .tile-placeholder {
-  flex-shrink: 0;
+  position: absolute;
   width: 90px;
   height: 60px;
   border: 3px dashed var(--accent-gold);
@@ -642,7 +736,6 @@ body {
   text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
   transition: all var(--transition-normal);
   cursor: pointer;
-  position: relative;
   overflow: hidden;
 }
 
@@ -695,9 +788,9 @@ body {
   }
 }
 
-.drop-hover {
-  transform: scale(1.1);
-  filter: brightness(1.2);
+.drop-hover, #board.drop-hover {
+  background: rgba(212, 175, 55, 0.2) !important;
+  border-color: var(--accent-light) !important;
 }
 
 .drop-hover::after {
@@ -725,6 +818,10 @@ body {
 /* ────────────────────────────────────────────────────────────────────────
  * Lobby Styles
  * ────────────────────────────────────────────────────────────────────── */
+#lobbyContainer {
+  display: none;
+}
+
 #lobbyList {
   list-style: none;
   background: #f8f9fa;
@@ -755,6 +852,16 @@ body {
   .info-panel {
     padding: var(--space-md);
   }
+  
+  .board-domino {
+    width: 35px;
+    height: 70px;
+  }
+  
+  .hand-domino {
+    width: 25px;
+    height: 50px;
+  }
 }
 
 @media (max-width: 768px) {
@@ -783,6 +890,20 @@ body {
       "left-player right-player"
       "player-hand";
   }
+  
+  .board-domino {
+    width: 30px;
+    height: 60px;
+  }
+  
+  .hand-domino {
+    width: 20px;
+    height: 40px;
+  }
+  
+  .domino-section {
+    font-size: 8px;
+  }
 }
 
 /* ────────────────────────────────────────────────────────────────────────
@@ -795,11 +916,15 @@ body {
     transition-duration: 0.01ms !important;
   }
   
-  .tile.dragging {
+  .tile.dragging, .domino-dragging {
     transform: scale(1.1);
   }
   
   .drop-target::after {
+    animation: none;
+  }
+  
+  .active-turn-indicator {
     animation: none;
   }
 }
@@ -813,12 +938,17 @@ body {
     --accent-gold: #000080;
   }
   
-  .tile {
+  .tile, .board-domino, .hand-domino {
     border-width: 3px;
   }
   
   .pip {
     background: #000000;
+  }
+  
+  .domino-section {
+    color: #000000;
+    font-weight: 900;
   }
 }
 
@@ -833,9 +963,84 @@ body {
   
   .game-container {
     box-shadow: none;
+    filter: none;
   }
   
-  .tile {
+  .tile, .board-domino, .hand-domino {
     box-shadow: 0 1px 3px rgba(0,0,0,0.3);
   }
+  
+  .game-table {
+    background: white;
+    border: 1px solid black;
+  }
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+ * Animation Keyframes
+ * ────────────────────────────────────────────────────────────────────── */
+@keyframes dominoPlace {
+  0% { 
+    transform: scale(1.2) rotate(0deg); 
+    opacity: 0.7; 
+  }
+  50% { 
+    transform: scale(1.1) rotate(2deg); 
+    opacity: 0.9; 
+  }
+  100% { 
+    transform: scale(1) rotate(0deg); 
+    opacity: 1; 
+  }
+}
+
+.domino-placed, .board-domino.placed {
+  animation: dominoPlace 0.5s ease-out;
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+ * Utility Classes
+ * ────────────────────────────────────────────────────────────────────── */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.no-scroll {
+  overflow: hidden;
+}
+
+.pointer-events-none {
+  pointer-events: none;
+}
+
+.cursor-pointer {
+  cursor: pointer;
+}
+
+.cursor-grab {
+  cursor: grab;
+}
+
+.cursor-grabbing {
+  cursor: grabbing;
 }

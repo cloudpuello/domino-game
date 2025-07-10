@@ -1,5 +1,6 @@
 /* =====================================================================
- * client.js — Dominican Domino front-end (REWRITTEN)
+ * client.js — Dominican Domino front-end (COMPLETE REWRITE)
+ * Fixed: Snake formation, missing hands, domino orientation
  * =================================================================== */
 
 /* ────────────────────────────────────────────────────────────────────────
@@ -9,6 +10,13 @@ const HIT_PADDING = 25;
 const ERROR_DISPLAY_TIME = 4000;
 const OPENING_TILE = [6, 6];
 const HAND_SIZE = 7;
+
+// Domino dimensions (portrait orientation)
+const DOMINO_WIDTH = 40;
+const DOMINO_HEIGHT = 80;
+const HAND_DOMINO_WIDTH = 30;
+const HAND_DOMINO_HEIGHT = 60;
+const DOMINO_GAP = 2;
 
 /* ────────────────────────────────────────────────────────────────────────
  * Socket connection and player setup
@@ -27,7 +35,8 @@ const gameState = {
   boardState: [],
   scores: [0, 0],
   seatMap: {},
-  handSizes: {}
+  handSizes: {},
+  players: []
 };
 
 /* ────────────────────────────────────────────────────────────────────────
@@ -60,20 +69,12 @@ const elements = {
   leftPlayer: $("leftPlayer"),
   rightPlayer: $("rightPlayer"),
   team0Score: $("team0-score"),
-  team1Score: $("team1-score")
-};
-
-/* ────────────────────────────────────────────────────────────────────────
- * Pip layouts for domino rendering
- * ────────────────────────────────────────────────────────────────────── */
-const PIP_LAYOUTS = {
-  0: [],
-  1: [[1, 1]],
-  2: [[0, 0], [2, 2]],
-  3: [[0, 0], [1, 1], [2, 2]],
-  4: [[0, 0], [0, 2], [2, 0], [2, 2]],
-  5: [[0, 0], [0, 2], [1, 1], [2, 0], [2, 2]],
-  6: [[0, 0], [0, 2], [1, 0], [1, 2], [2, 0], [2, 2]]
+  team1Score: $("team1-score"),
+  // All hand elements
+  hand0: $("hand0"),
+  hand1: $("hand1"),
+  hand2: $("hand2"),
+  hand3: $("hand3")
 };
 
 /* ────────────────────────────────────────────────────────────────────────
@@ -83,6 +84,8 @@ function initializeGame() {
   setupSocketListeners();
   attemptReconnection();
   setupWindowListeners();
+  initializeDominoCSS();
+  ensureHandElements();
 }
 
 function attemptReconnection() {
@@ -97,82 +100,388 @@ function setupWindowListeners() {
   window.addEventListener("resize", adjustBoardCenter);
 }
 
+function initializeDominoCSS() {
+  const style = document.createElement('style');
+  style.textContent = `
+    /* Portrait domino styles */
+    .board-domino {
+      position: absolute;
+      width: ${DOMINO_WIDTH}px;
+      height: ${DOMINO_HEIGHT}px;
+      background: #f0f0f0;
+      border: 2px solid #333;
+      border-radius: 6px;
+      display: flex;
+      flex-direction: column;
+      z-index: 10;
+      box-shadow: 0 3px 6px rgba(0,0,0,0.3);
+      transition: all 0.3s ease;
+    }
+    
+    .hand-domino {
+      width: ${HAND_DOMINO_WIDTH}px;
+      height: ${HAND_DOMINO_HEIGHT}px;
+      background: #f8f8f8;
+      border: 1px solid #333;
+      border-radius: 4px;
+      margin: 2px;
+      display: inline-flex;
+      flex-direction: column;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    
+    .hand-domino:hover {
+      transform: scale(1.1) translateY(-3px);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+    }
+    
+    .domino-section {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      color: #333;
+    }
+    
+    .domino-section.top {
+      border-bottom: 1px solid #333;
+      font-size: 14px;
+    }
+    
+    .domino-section.bottom {
+      font-size: 14px;
+    }
+    
+    .hand-domino .domino-section {
+      font-size: 10px;
+    }
+    
+    .player-hand-container {
+      min-height: 80px;
+      padding: 10px;
+      border-radius: 8px;
+      background: rgba(255,255,255,0.1);
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      align-items: center;
+      border: 2px solid transparent;
+      transition: all 0.3s ease;
+    }
+    
+    .player-hand-container.current-player {
+      border-color: #ffd700;
+      background: rgba(255,215,0,0.2);
+      box-shadow: 0 0 15px rgba(255,215,0,0.5);
+    }
+    
+    .domino-dragging {
+      opacity: 0.7;
+      transform: scale(1.1);
+      z-index: 1000;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+function ensureHandElements() {
+  // Make sure all hand elements exist and have proper classes
+  for (let i = 0; i < 4; i++) {
+    let handElement = $(`hand${i}`);
+    if (!handElement) {
+      // Create hand element if it doesn't exist
+      handElement = document.createElement('div');
+      handElement.id = `hand${i}`;
+      handElement.className = 'player-hand-container';
+      
+      // Find appropriate parent or create one
+      const gameTable = document.querySelector('.game-table') || document.body;
+      gameTable.appendChild(handElement);
+    } else {
+      handElement.className = 'player-hand-container';
+    }
+    elements[`hand${i}`] = handElement;
+  }
+}
+
 /* ────────────────────────────────────────────────────────────────────────
  * UI Helper functions
  * ────────────────────────────────────────────────────────────────────── */
 function setStatus(text) {
-  elements.status.textContent = text;
+  if (elements.status) {
+    elements.status.textContent = text;
+  }
 }
 
 function showError(text) {
-  elements.errors.textContent = text;
-  setTimeout(() => {
-    elements.errors.textContent = "";
-  }, ERROR_DISPLAY_TIME);
+  if (elements.errors) {
+    elements.errors.textContent = text;
+    setTimeout(() => {
+      elements.errors.textContent = "";
+    }, ERROR_DISPLAY_TIME);
+  }
 }
 
 function addMessage(text) {
-  const messageDiv = document.createElement("div");
-  messageDiv.textContent = text;
-  elements.messages.prepend(messageDiv);
+  if (elements.messages) {
+    const messageDiv = document.createElement("div");
+    messageDiv.textContent = text;
+    elements.messages.prepend(messageDiv);
+  }
 }
 
 function adjustBoardCenter() {
-  const shouldCenter = elements.board.scrollWidth <= elements.board.clientWidth;
-  elements.board.classList.toggle("board-center", shouldCenter);
+  if (elements.board) {
+    const shouldCenter = elements.board.scrollWidth <= elements.board.clientWidth;
+    elements.board.classList.toggle("board-center", shouldCenter);
+  }
 }
 
 /* ────────────────────────────────────────────────────────────────────────
- * Domino tile rendering
+ * Snake Formation Logic
  * ────────────────────────────────────────────────────────────────────── */
-function createHalfHTML(pipCount) {
-  let html = '<div class="half">';
+function calculateSnakePositions(board, startX, startY) {
+  const positions = [];
   
-  PIP_LAYOUTS[pipCount].forEach(([row, col]) => {
-    html += `<span class="pip" style="grid-area:${row + 1}/${col + 1}"></span>`;
+  if (board.length === 0) return positions;
+  
+  // Start position for first domino (center)
+  let currentX = startX - DOMINO_WIDTH / 2;
+  let currentY = startY - DOMINO_HEIGHT / 2;
+  let direction = 'right';
+  
+  // First domino position
+  positions.push({ 
+    x: currentX, 
+    y: currentY, 
+    rotation: 0,
+    isDouble: board[0][0] === board[0][1]
   });
   
-  html += '</div>';
-  return html;
-}
-
-function createTileHTML([leftPips, rightPips]) {
-  return createHalfHTML(leftPips) + 
-         '<div class="separator"></div>' + 
-         createHalfHTML(rightPips);
+  // Calculate positions for remaining dominoes
+  for (let i = 1; i < board.length; i++) {
+    const currentDomino = board[i];
+    const isDouble = currentDomino[0] === currentDomino[1];
+    
+    // Move to next position based on current direction
+    switch (direction) {
+      case 'right':
+        currentX += DOMINO_WIDTH + DOMINO_GAP;
+        // Check if we need to turn (hit edge or place double)
+        if (currentX > startX + 250) {
+          direction = 'down';
+          currentY += DOMINO_HEIGHT + DOMINO_GAP;
+        }
+        break;
+        
+      case 'down':
+        currentY += DOMINO_HEIGHT + DOMINO_GAP;
+        if (currentY > startY + 150) {
+          direction = 'left';
+          currentX -= DOMINO_WIDTH + DOMINO_GAP;
+        }
+        break;
+        
+      case 'left':
+        currentX -= DOMINO_WIDTH + DOMINO_GAP;
+        if (currentX < startX - 250) {
+          direction = 'up';
+          currentY -= DOMINO_HEIGHT + DOMINO_GAP;
+        }
+        break;
+        
+      case 'up':
+        currentY -= DOMINO_HEIGHT + DOMINO_GAP;
+        if (currentY < startY - 150) {
+          direction = 'right';
+          currentX += DOMINO_WIDTH + DOMINO_GAP;
+        }
+        break;
+    }
+    
+    // Determine rotation based on direction and if it's a double
+    let rotation = 0;
+    if (isDouble) {
+      // Doubles are always perpendicular to the line
+      rotation = (direction === 'right' || direction === 'left') ? 90 : 0;
+    } else {
+      // Regular dominoes follow the direction
+      rotation = (direction === 'up' || direction === 'down') ? 90 : 0;
+    }
+    
+    positions.push({ 
+      x: currentX, 
+      y: currentY, 
+      rotation,
+      isDouble 
+    });
+  }
+  
+  return positions;
 }
 
 /* ────────────────────────────────────────────────────────────────────────
- * Board rendering
+ * Domino creation functions
  * ────────────────────────────────────────────────────────────────────── */
+function createBoardDominoElement(domino, position) {
+  const element = document.createElement('div');
+  element.className = 'board-domino';
+  
+  // Set position and rotation
+  element.style.left = `${position.x}px`;
+  element.style.top = `${position.y}px`;
+  element.style.transform = `rotate(${position.rotation}deg)`;
+  
+  // Create top section
+  const topSection = document.createElement('div');
+  topSection.className = 'domino-section top';
+  topSection.textContent = domino[0];
+  
+  // Create bottom section
+  const bottomSection = document.createElement('div');
+  bottomSection.className = 'domino-section bottom';
+  bottomSection.textContent = domino[1];
+  
+  element.appendChild(topSection);
+  element.appendChild(bottomSection);
+  
+  return element;
+}
+
+function createHandDominoElement(domino, playerIndex, dominoIndex) {
+  const element = document.createElement('div');
+  element.className = 'hand-domino';
+  element.dataset.playerIndex = playerIndex;
+  element.dataset.dominoIndex = dominoIndex;
+  
+  // Create top section
+  const topSection = document.createElement('div');
+  topSection.className = 'domino-section top';
+  topSection.textContent = domino[0];
+  
+  // Create bottom section
+  const bottomSection = document.createElement('div');
+  bottomSection.className = 'domino-section bottom';
+  bottomSection.textContent = domino[1];
+  
+  element.appendChild(topSection);
+  element.appendChild(bottomSection);
+  
+  // Add drag functionality for current player
+  if (playerIndex === gameState.mySeat && isMyTurn()) {
+    element.draggable = false; // Disable native drag
+    element.addEventListener('mousedown', e => startDrag(e, domino, element));
+    element.addEventListener('touchstart', e => startDrag(e, domino, element), { passive: false });
+  }
+  
+  return element;
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+ * Board rendering with snake formation
+ * ────────────────────────────────────────────────────────────────────── */
+function renderBoard() {
+  if (!elements.board) return;
+  
+  elements.board.innerHTML = "";
+  
+  if (gameState.boardState.length === 0) {
+    renderPlaceholder();
+    return;
+  }
+  
+  // Calculate board center
+  const boardRect = elements.board.getBoundingClientRect();
+  const centerX = boardRect.width / 2;
+  const centerY = boardRect.height / 2;
+  
+  // Calculate snake positions
+  const positions = calculateSnakePositions(gameState.boardState, centerX, centerY);
+  
+  // Create and position domino elements
+  gameState.boardState.forEach((domino, index) => {
+    const position = positions[index];
+    if (position) {
+      const dominoElement = createBoardDominoElement(domino, position);
+      elements.board.appendChild(dominoElement);
+    }
+  });
+  
+  adjustBoardCenter();
+}
+
 function renderPlaceholder() {
   const placeholder = document.createElement("div");
   placeholder.className = "tile-placeholder drop-target";
   placeholder.dataset.side = "left";
   placeholder.textContent = gameState.boardState.length === 0 ? "6|6" : "PLAY";
+  placeholder.style.position = 'absolute';
+  placeholder.style.left = '50%';
+  placeholder.style.top = '50%';
+  placeholder.style.transform = 'translate(-50%, -50%)';
   elements.board.appendChild(placeholder);
 }
 
-function renderBoard() {
-  elements.board.innerHTML = "";
-  
-  if (gameState.boardState.length === 0) {
-    renderPlaceholder();
-  } else {
-    gameState.boardState.forEach(tile => {
-      const tileElement = document.createElement("div");
-      tileElement.className = "tile disabled";
-      
-      if (tile[0] === tile[1]) {
-        tileElement.classList.add("double");
-      }
-      
-      tileElement.innerHTML = createTileHTML(tile);
-      elements.board.appendChild(tileElement);
-    });
+/* ────────────────────────────────────────────────────────────────────────
+ * Hand rendering for all players
+ * ────────────────────────────────────────────────────────────────────── */
+function renderAllHands() {
+  // Clear all hands first
+  for (let i = 0; i < 4; i++) {
+    const handElement = elements[`hand${i}`];
+    if (handElement) {
+      handElement.innerHTML = '';
+      handElement.classList.remove('current-player');
+    }
   }
   
-  adjustBoardCenter();
+  // Render each player's hand
+  gameState.players.forEach((player, playerIndex) => {
+    renderPlayerHand(playerIndex, player);
+  });
+  
+  // Highlight current player
+  if (gameState.currentTurn !== null) {
+    const currentHandElement = elements[`hand${gameState.currentTurn}`];
+    if (currentHandElement) {
+      currentHandElement.classList.add('current-player');
+    }
+  }
+}
+
+function renderPlayerHand(playerIndex, player) {
+  const handElement = elements[`hand${playerIndex}`];
+  if (!handElement) return;
+  
+  // If this is the current player, show their actual hand
+  if (playerIndex === gameState.mySeat && gameState.myHand) {
+    gameState.myHand.forEach((domino, index) => {
+      const dominoElement = createHandDominoElement(domino, playerIndex, index);
+      handElement.appendChild(dominoElement);
+    });
+  } else {
+    // For other players, show face-down dominoes
+    const handSize = gameState.handSizes[playerIndex] || 0;
+    for (let i = 0; i < handSize; i++) {
+      const dummyDomino = document.createElement('div');
+      dummyDomino.className = 'hand-domino dummy';
+      dummyDomino.style.background = '#4a5568';
+      dummyDomino.style.border = '1px solid #2d3748';
+      
+      // Add back pattern
+      const backPattern = document.createElement('div');
+      backPattern.style.width = '100%';
+      backPattern.style.height = '100%';
+      backPattern.style.background = 'repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(255,255,255,0.1) 2px, rgba(255,255,255,0.1) 4px)';
+      backPattern.style.borderRadius = '3px';
+      
+      dummyDomino.appendChild(backPattern);
+      handElement.appendChild(dummyDomino);
+    }
+  }
 }
 
 /* ────────────────────────────────────────────────────────────────────────
@@ -182,10 +491,8 @@ function getBoardEnds() {
   if (gameState.boardState.length === 0) return null;
   
   return {
-    leftTile: elements.board.firstChild,
     leftPip: gameState.boardState[0][0],
-    rightTile: elements.board.lastChild,
-    rightPip: gameState.boardState.at(-1)[1]
+    rightPip: gameState.boardState[gameState.boardState.length - 1][1]
   };
 }
 
@@ -207,42 +514,6 @@ function isMyTurn() {
 }
 
 /* ────────────────────────────────────────────────────────────────────────
- * Hand rendering
- * ────────────────────────────────────────────────────────────────────── */
-function renderHand() {
-  elements.hand.innerHTML = "";
-  const ends = getBoardEnds();
-  
-  gameState.myHand.forEach(tile => {
-    const tileElement = createHandTileElement(tile, ends);
-    elements.hand.appendChild(tileElement);
-  });
-}
-
-function createHandTileElement(tile, ends) {
-  const tileElement = document.createElement("div");
-  tileElement.className = "tile";
-  tileElement.innerHTML = createTileHTML(tile);
-  
-  const playable = isTilePlayable(tile, ends);
-  
-  if (isMyTurn() && playable) {
-    makePlayableTile(tileElement, tile);
-  } else {
-    tileElement.classList.add("disabled");
-  }
-  
-  return tileElement;
-}
-
-function makePlayableTile(tileElement, tile) {
-  tileElement.classList.add("playable");
-  tileElement.addEventListener("mousedown", e => startDrag(e, tile, tileElement));
-  tileElement.addEventListener("touchstart", e => startDrag(e, tile, tileElement), { passive: false });
-  tileElement.addEventListener("dragstart", e => e.preventDefault());
-}
-
-/* ────────────────────────────────────────────────────────────────────────
  * Drag and drop functionality
  * ────────────────────────────────────────────────────────────────────── */
 function getEventPosition(event) {
@@ -250,28 +521,6 @@ function getEventPosition(event) {
     return { x: event.touches[0].clientX, y: event.touches[0].clientY };
   }
   return { x: event.clientX, y: event.clientY };
-}
-
-function isPositionInExpandedRect(position, rect) {
-  return position.x > rect.left - HIT_PADDING && 
-         position.x < rect.right + HIT_PADDING &&
-         position.y > rect.top - HIT_PADDING && 
-         position.y < rect.bottom + HIT_PADDING;
-}
-
-function markValidDropTargets([a, b]) {
-  const ends = getBoardEnds();
-  if (!ends) return;
-  
-  if (a === ends.leftPip || b === ends.leftPip) {
-    ends.leftTile.classList.add("drop-target");
-    ends.leftTile.dataset.side = "left";
-  }
-  
-  if (a === ends.rightPip || b === ends.rightPip) {
-    ends.rightTile.classList.add("drop-target");
-    ends.rightTile.dataset.side = "right";
-  }
 }
 
 function cleanupDrag() {
@@ -312,7 +561,11 @@ function startDrag(event, tile, tileElement) {
     event.preventDefault();
   }
   
-  if (dragState.isDragging) return;
+  if (dragState.isDragging || !isMyTurn()) return;
+  
+  // Check if tile is playable
+  const ends = getBoardEnds();
+  if (!isTilePlayable(tile, ends)) return;
   
   // Set up drag state
   Object.assign(dragState, {
@@ -324,14 +577,15 @@ function startDrag(event, tile, tileElement) {
   
   // Create dragged element
   dragState.element = tileElement.cloneNode(true);
-  dragState.element.classList.add("dragging");
+  dragState.element.classList.add("domino-dragging");
+  dragState.element.style.position = 'fixed';
+  dragState.element.style.pointerEvents = 'none';
+  dragState.element.style.zIndex = '1000';
   document.body.appendChild(dragState.element);
   
   // Mark original tile as ghost
   tileElement.classList.add("ghost");
-  
-  // Mark valid drop targets
-  markValidDropTargets(tile);
+  tileElement.style.opacity = '0.3';
   
   // Position dragged element
   const position = getEventPosition(event);
@@ -355,23 +609,23 @@ function handleDragMove(event) {
   dragState.element.style.left = position.x + "px";
   dragState.element.style.top = position.y + "px";
   
-  // Check for valid drop targets
-  let foundValidTarget = false;
-  
-  document.querySelectorAll(".drop-target").forEach(target => {
-    const rect = target.getBoundingClientRect();
+  // Check if over board for drop
+  if (elements.board) {
+    const boardRect = elements.board.getBoundingClientRect();
+    const isOverBoard = position.x > boardRect.left && 
+                       position.x < boardRect.right && 
+                       position.y > boardRect.top && 
+                       position.y < boardRect.bottom;
     
-    if (isPositionInExpandedRect(position, rect)) {
-      foundValidTarget = true;
-      dragState.hoveredSide = target.dataset.side;
-      target.classList.add("drop-hover");
+    if (isOverBoard) {
+      // Determine which side based on position
+      const centerX = boardRect.left + boardRect.width / 2;
+      dragState.hoveredSide = position.x < centerX ? 'left' : 'right';
+      elements.board.classList.add('drop-hover');
     } else {
-      target.classList.remove("drop-hover");
+      dragState.hoveredSide = null;
+      elements.board.classList.remove('drop-hover');
     }
-  });
-  
-  if (!foundValidTarget) {
-    dragState.hoveredSide = null;
   }
 }
 
@@ -391,114 +645,38 @@ function handleDragEnd() {
     });
   } else {
     // Invalid drop - restore original tile
-    dragState.originalTile.classList.remove("ghost");
+    if (dragState.originalTile) {
+      dragState.originalTile.style.opacity = '1';
+    }
+  }
+  
+  // Clean up board hover state
+  if (elements.board) {
+    elements.board.classList.remove('drop-hover');
   }
   
   cleanupDrag();
 }
 
 /* ────────────────────────────────────────────────────────────────────────
- * Player position and opponent rendering
- * ────────────────────────────────────────────────────────────────────── */
-function getRelativePlayerPosition(seat) {
-  if (seat === gameState.mySeat) return "self";
-  
-  const difference = (seat - gameState.mySeat + 4) % 4;
-  switch (difference) {
-    case 1: return "right";
-    case 2: return "top";
-    case 3: return "left";
-    default: return "self";
-  }
-}
-
-function renderOpponents() {
-  const playerAreas = {
-    top: elements.topPlayer,
-    left: elements.leftPlayer,
-    right: elements.rightPlayer
-  };
-  
-  // Clear all player areas
-  Object.values(playerAreas).forEach(area => {
-    area.innerHTML = "";
-  });
-  
-  // Render each opponent
-  Object.entries(gameState.seatMap).forEach(([seat, playerInfo]) => {
-    const seatNumber = Number(seat);
-    if (seatNumber === gameState.mySeat) return;
-    
-    const position = getRelativePlayerPosition(seatNumber);
-    const area = playerAreas[position];
-    if (!area) return;
-    
-    renderPlayerInArea(area, playerInfo, seatNumber);
-  });
-}
-
-function renderPlayerInArea(area, playerInfo, seat) {
-  // Player name
-  const nameElement = document.createElement("div");
-  nameElement.textContent = `${playerInfo.name} (Seat ${seat})`;
-  area.appendChild(nameElement);
-  
-  // Player's hand display
-  const handDisplay = document.createElement("div");
-  handDisplay.className = "player-area-hand-display";
-  
-  const tileCount = gameState.handSizes[seat] || 0;
-  for (let i = 0; i < tileCount; i++) {
-    const dummyTile = document.createElement("div");
-    dummyTile.className = "dummy-tile";
-    handDisplay.appendChild(dummyTile);
-  }
-  
-  area.appendChild(handDisplay);
-}
-
-/* ────────────────────────────────────────────────────────────────────────
- * Score and pip count rendering
+ * Score rendering
  * ────────────────────────────────────────────────────────────────────── */
 function renderScores() {
-  elements.team0Score.textContent = gameState.scores[0];
-  elements.team1Score.textContent = gameState.scores[1];
-}
-
-function renderPipCounts(pipCounts) {
-  if (!pipCounts) {
-    elements.pipCounts.textContent = "";
-    return;
+  if (elements.team0Score) {
+    elements.team0Score.textContent = gameState.scores[0] || 0;
   }
-  
-  const pipCountText = Object.entries(pipCounts)
-    .map(([pip, count]) => `${pip}:${count}`)
-    .join(" | ");
-  
-  elements.pipCounts.textContent = pipCountText;
+  if (elements.team1Score) {
+    elements.team1Score.textContent = gameState.scores[1] || 0;
+  }
 }
 
 /* ────────────────────────────────────────────────────────────────────────
- * Turn indicator management
+ * Main update function
  * ────────────────────────────────────────────────────────────────────── */
-function updateTurnIndicators(currentTurn) {
-  // Remove indicators from all areas
-  const allAreas = [elements.topPlayer, elements.leftPlayer, elements.rightPlayer, elements.hand];
-  allAreas.forEach(area => area.classList.remove("active-turn-indicator"));
-  
-  // Add indicator to current player's area
-  const position = getRelativePlayerPosition(currentTurn);
-  const areaMap = {
-    top: elements.topPlayer,
-    left: elements.leftPlayer,
-    right: elements.rightPlayer,
-    self: elements.hand
-  };
-  
-  const activeArea = areaMap[position];
-  if (activeArea) {
-    activeArea.classList.add("active-turn-indicator");
-  }
+function updateGameDisplay() {
+  renderBoard();
+  renderAllHands();
+  renderScores();
 }
 
 /* ────────────────────────────────────────────────────────────────────────
@@ -528,75 +706,80 @@ function handleRoomJoined({ roomId, seat }) {
   sessionStorage.setItem("domino_mySeat", seat);
   
   // Update player info display
-  const teamNumber = seat % 2 === 0 ? "0 & 2" : "1 & 3";
-  elements.playerInfo.textContent = `You are Seat ${seat} (Team ${teamNumber})`;
+  if (elements.playerInfo) {
+    const teamNumber = seat % 2 === 0 ? "0 & 2" : "1 & 3";
+    elements.playerInfo.textContent = `You are Seat ${seat} (Team ${teamNumber})`;
+  }
 }
 
 function handleLobbyUpdate({ players }) {
-  elements.lobbyContainer.style.display = "block";
+  if (elements.lobbyContainer) {
+    elements.lobbyContainer.style.display = "block";
+  }
   
-  // Update seat map
+  // Update players array and seat map
+  gameState.players = players;
   gameState.seatMap = Object.fromEntries(
     players.map(player => [player.seat, player])
   );
   
   // Update lobby list
-  elements.lobbyList.innerHTML = "";
-  players.forEach(player => {
-    const listItem = document.createElement("li");
-    listItem.textContent = `Seat ${player.seat}: ${player.name}`;
-    elements.lobbyList.appendChild(listItem);
-  });
+  if (elements.lobbyList) {
+    elements.lobbyList.innerHTML = "";
+    players.forEach(player => {
+      const listItem = document.createElement("li");
+      listItem.textContent = `Seat ${player.seat}: ${player.name}`;
+      elements.lobbyList.appendChild(listItem);
+    });
+  }
 }
 
 function handleRoundStart({ yourHand, startingSeat, scores }) {
-  elements.lobbyContainer.style.display = "none";
+  if (elements.lobbyContainer) {
+    elements.lobbyContainer.style.display = "none";
+  }
   
   // Update game state
-  gameState.myHand = yourHand;
+  gameState.myHand = yourHand || [];
   gameState.boardState = [];
-  gameState.scores = scores;
+  gameState.scores = scores || [0, 0];
   gameState.currentTurn = startingSeat;
   gameState.handSizes = { 0: HAND_SIZE, 1: HAND_SIZE, 2: HAND_SIZE, 3: HAND_SIZE };
   
   // Clear messages and cleanup
-  elements.messages.innerHTML = "";
+  if (elements.messages) {
+    elements.messages.innerHTML = "";
+  }
   cleanupDrag();
   
-  // Render everything
-  renderScores();
-  renderBoard();
-  renderHand();
-  renderOpponents();
+  // Update game display
+  updateGameDisplay();
   
   // Update status
   const statusText = gameState.currentTurn === gameState.mySeat ? 
-    "Your turn!" : 
+    "Your turn! Play the 6|6" : 
     `Waiting for seat ${gameState.currentTurn}`;
   setStatus(statusText);
 }
 
 function handleHandUpdate(newHand) {
-  gameState.myHand = newHand;
+  gameState.myHand = newHand || [];
   gameState.handSizes[gameState.mySeat] = newHand.length;
-  renderHand();
-  renderOpponents();
+  renderAllHands();
 }
 
-function handleMoveUpdate({ seat, tile, board, pipCounts }) {
-  gameState.boardState = board;
+function handleMoveUpdate({ seat, tile, board }) {
+  gameState.boardState = board || [];
   
-  // Update hand size for other players
+  // Update hand size for the player who played
   if (seat !== gameState.mySeat) {
-    gameState.handSizes[seat]--;
+    gameState.handSizes[seat] = Math.max(0, (gameState.handSizes[seat] || 0) - 1);
   }
   
   cleanupDrag();
-  renderBoard();
-  renderPipCounts(pipCounts);
-  renderOpponents();
+  updateGameDisplay();
   
-  addMessage(`${seat} played ${tile[0]}|${tile[1]}.`);
+  addMessage(`Seat ${seat} played ${tile[0]}|${tile[1]}.`);
 }
 
 function handleTurnChange(turn) {
@@ -608,8 +791,7 @@ function handleTurnChange(turn) {
   setStatus(statusText);
   
   cleanupDrag();
-  renderHand();
-  updateTurnIndicators(turn);
+  renderAllHands(); // Re-render to update current player highlighting
 }
 
 function handlePlayerPassed({ seat }) {
@@ -617,12 +799,11 @@ function handlePlayerPassed({ seat }) {
 }
 
 function handleRoundEnd({ winner, reason, points, scores, board }) {
-  gameState.boardState = board;
-  gameState.scores = scores;
+  gameState.boardState = board || [];
+  gameState.scores = scores || [0, 0];
   
   cleanupDrag();
-  renderScores();
-  renderBoard();
+  updateGameDisplay();
   
   const statusText = `Seat ${winner} wins (${reason}) +${points} pts.`;
   setStatus(statusText);
@@ -635,7 +816,7 @@ function handleGameOver({ winningTeam, scores }) {
   sessionStorage.removeItem("domino_mySeat");
   
   // Show game over message
-  alert(`Game over! Team ${winningTeam} wins.\\nScores: ${scores.join(" / ")}`);
+  alert(`Game over! Team ${winningTeam} wins.\nScores: ${scores.join(" / ")}`);
   setStatus("Game over.");
 }
 
@@ -644,7 +825,7 @@ function handleReconnectSuccess() {
 }
 
 function handleBonusAwarded({ seat, type, points, scores }) {
-  gameState.scores = scores;
+  gameState.scores = scores || [0, 0];
   renderScores();
   addMessage(`Team ${seat % 2} gets +${points} pts for ${type}!`);
 }
@@ -652,4 +833,5 @@ function handleBonusAwarded({ seat, type, points, scores }) {
 /* ────────────────────────────────────────────────────────────────────────
  * Initialize the game when page loads
  * ────────────────────────────────────────────────────────────────────── */
+document.addEventListener('DOMContentLoaded', initializeGame);
 initializeGame();
