@@ -5,6 +5,8 @@
  * - All DOM manipulation happens here
  * - Other modules call UIManager to update display
  * - Ensures player's hand is always at bottom
+ * - FIXED: Bug 1 - Clockwise seating
+ * - FIXED: Bug 3 - Side hand spanning
  * =================================================================== */
 
 const UIManager = {
@@ -57,7 +59,7 @@ const UIManager = {
   },
   
   /**
-   * Inject dynamic CSS
+   * Inject dynamic CSS - INCLUDES FIX FOR BUG 3
    */
   injectStyles() {
     const style = document.createElement('style');
@@ -86,6 +88,7 @@ const UIManager = {
         flex-direction: column;
         cursor: pointer;
         transition: all 0.2s ease;
+        position: relative;
       }
       
       .hand-domino:hover {
@@ -99,6 +102,7 @@ const UIManager = {
         justify-content: center;
         font-weight: bold;
         color: #333;
+        position: relative;
       }
       
       .domino-section.top {
@@ -128,37 +132,95 @@ const UIManager = {
         background: rgba(76, 175, 80, 0.1);
         border-color: rgba(76, 175, 80, 0.3);
       }
+      
+      /* FIX FOR BUG 3: Side hands spanning */
+      .player-area.left .player-hand-container,
+      .player-area.right .player-hand-container {
+        flex-direction: column;
+        justify-content: space-around;
+        height: 400px;
+        max-height: 400px;
+        padding: 20px 10px;
+      }
+      
+      .player-area.left .hand-domino,
+      .player-area.right .hand-domino {
+        margin: 8px 0;
+      }
+      
+      /* Rotate dominoes for side players */
+      .position-left .hand-domino {
+        transform: rotate(90deg);
+      }
+      
+      .position-right .hand-domino {
+        transform: rotate(-90deg);
+      }
+      
+      .position-left .hand-domino:hover {
+        transform: rotate(90deg) scale(1.1);
+      }
+      
+      .position-right .hand-domino:hover {
+        transform: rotate(-90deg) scale(1.1);
+      }
+      
+      /* Pip container for domino dots */
+      .pip-container {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        top: 0;
+        left: 0;
+      }
+      
+      .pip {
+        position: absolute;
+        width: 5px;
+        height: 5px;
+        background: #333;
+        border-radius: 50%;
+      }
     `;
     document.head.appendChild(style);
   },
   
   /**
-   * Remap UI positions so player is always at bottom
+   * FIX FOR BUG 1: Correct clockwise seating arrangement
    */
   remapPositions(mySeat) {
     console.log('UIManager: Remapping positions for seat', mySeat);
     
-    // Calculate position mapping
-    const positions = ['bottom', 'left', 'top', 'right'];
-    const rotation = (4 - mySeat) % 4;
+    // Define clockwise order from player's perspective
+    // You are always at bottom, then going clockwise: left, top, right
+    const seatMapping = {
+      bottom: mySeat,
+      left: (mySeat + 1) % 4,    // Next player clockwise
+      top: (mySeat + 2) % 4,     // Player across
+      right: (mySeat + 3) % 4    // Previous player (to your right)
+    };
     
-    // Create seat to position mapping
-    const seatToPosition = {};
-    for (let i = 0; i < 4; i++) {
-      const seat = i;
-      const posIndex = (i + rotation) % 4;
-      seatToPosition[seat] = positions[posIndex];
-    }
+    console.log('Seat mapping:', seatMapping);
     
-    // Update player area labels and assign hands
-    for (let seat = 0; seat < 4; seat++) {
-      const position = seatToPosition[seat];
+    // Clear all positions first
+    Object.entries(this.elements.playerAreas).forEach(([position, area]) => {
+      const existingHand = area.querySelector('.player-hand-container');
+      if (existingHand && existingHand.parentNode === area) {
+        existingHand.remove();
+      }
+    });
+    
+    // Assign hands to correct positions
+    Object.entries(seatMapping).forEach(([position, seat]) => {
       const playerArea = this.elements.playerAreas[position];
       const handElement = this.elements.hands[seat];
       
       if (playerArea && handElement) {
-        // Move hand to correct position
-        playerArea.querySelector('.player-hand-container')?.remove();
+        // Remove hand from any previous location
+        if (handElement.parentNode) {
+          handElement.remove();
+        }
+        
         playerArea.appendChild(handElement);
         
         // Update label
@@ -168,11 +230,19 @@ const UIManager = {
             nameDiv.textContent = 'Your Hand';
             handElement.classList.add('my-hand');
           } else {
-            nameDiv.textContent = `Seat ${seat}`;
+            const player = LobbyManager.players.find(p => p && p.seat === seat);
+            nameDiv.textContent = player ? `${player.name} (Seat ${seat})` : `Seat ${seat}`;
           }
         }
+        
+        // Add position class for CSS styling
+        handElement.className = 'player-hand-container';
+        handElement.classList.add(`position-${position}`);
+        if (seat === mySeat) {
+          handElement.classList.add('my-hand');
+        }
       }
-    }
+    });
   },
   
   /**
@@ -186,7 +256,7 @@ const UIManager = {
         `You are Seat ${seat} (Team ${team} with Seat ${partner})`;
     }
     
-    // Remap positions so player is at bottom
+    // Remap positions so player is at bottom with correct clockwise order
     this.remapPositions(seat);
   },
   

@@ -5,6 +5,7 @@
  * - Shows actual tiles for current player
  * - Shows face-down tiles for opponents
  * - Highlights current turn
+ * - FIXED: Bug 5 - Proper pip rendering
  * =================================================================== */
 
 const HandRenderer = {
@@ -100,13 +101,21 @@ const HandRenderer = {
       pattern.style.cssText = `
         width: 100%;
         height: 100%;
-        background-image: repeating-linear-gradient(
-          45deg,
-          transparent,
-          transparent 3px,
-          rgba(255,255,255,0.1) 3px,
-          rgba(255,255,255,0.1) 6px
-        );
+        background-image: 
+          repeating-linear-gradient(
+            45deg,
+            transparent,
+            transparent 3px,
+            rgba(255,255,255,0.1) 3px,
+            rgba(255,255,255,0.1) 6px
+          ),
+          repeating-linear-gradient(
+            -45deg,
+            transparent,
+            transparent 3px,
+            rgba(255,255,255,0.05) 3px,
+            rgba(255,255,255,0.05) 6px
+          );
         border-radius: 3px;
       `;
       dummy.appendChild(pattern);
@@ -115,7 +124,7 @@ const HandRenderer = {
   },
   
   /**
-   * Create hand domino element
+   * Create hand domino element with proper pips
    */
   createHandDomino(domino, seat, index) {
     const element = document.createElement('div');
@@ -124,20 +133,77 @@ const HandRenderer = {
     element.dataset.index = index;
     element.dataset.value = JSON.stringify(domino);
     
-    // Top section
+    // Top section with pips
     const topSection = document.createElement('div');
     topSection.className = 'domino-section top';
-    topSection.textContent = domino[0];
+    topSection.appendChild(this.createPipPattern(domino[0]));
     
-    // Bottom section
+    // Bottom section with pips
     const bottomSection = document.createElement('div');
     bottomSection.className = 'domino-section bottom';
-    bottomSection.textContent = domino[1];
+    bottomSection.appendChild(this.createPipPattern(domino[1]));
     
     element.appendChild(topSection);
     element.appendChild(bottomSection);
     
     return element;
+  },
+  
+  /**
+   * FIX FOR BUG 5: Create proper pip pattern
+   */
+  createPipPattern(value) {
+    const container = document.createElement('div');
+    container.className = 'pip-container';
+    container.style.cssText = `
+      position: relative;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    `;
+    
+    // Pip patterns for each value (0-6)
+    const patterns = {
+      0: [], // Blank
+      1: [[0.5, 0.5]], // Center
+      2: [[0.25, 0.25], [0.75, 0.75]], // Diagonal corners
+      3: [[0.25, 0.25], [0.5, 0.5], [0.75, 0.75]], // Diagonal line
+      4: [[0.25, 0.25], [0.25, 0.75], [0.75, 0.25], [0.75, 0.75]], // Four corners
+      5: [[0.25, 0.25], [0.25, 0.75], [0.5, 0.5], [0.75, 0.25], [0.75, 0.75]], // Four corners + center
+      6: [[0.25, 0.2], [0.25, 0.5], [0.25, 0.8], [0.75, 0.2], [0.75, 0.5], [0.75, 0.8]] // Two columns
+    };
+    
+    const positions = patterns[value] || [];
+    
+    // Create pips
+    positions.forEach(([x, y]) => {
+      const pip = document.createElement('div');
+      pip.className = 'pip';
+      pip.style.cssText = `
+        position: absolute;
+        width: 4px;
+        height: 4px;
+        background: #333;
+        border-radius: 50%;
+        left: ${x * 100}%;
+        top: ${y * 100}%;
+        transform: translate(-50%, -50%);
+      `;
+      container.appendChild(pip);
+    });
+    
+    // If no pips, show the number for debugging
+    if (positions.length === 0 && value !== 0) {
+      const number = document.createElement('div');
+      number.textContent = value;
+      number.style.fontSize = '10px';
+      number.style.fontWeight = 'bold';
+      container.appendChild(number);
+    }
+    
+    return container;
   },
   
   /**
