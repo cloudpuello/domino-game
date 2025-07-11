@@ -207,9 +207,9 @@ const BoardRenderer = {
   createBoardDomino(domino, position) {
     const element = document.createElement('div');
     element.className = 'board-domino';
-    element.style.left = ${position.x}px;
-    element.style.top = ${position.y}px;
-    element.style.transform = rotate(${position.rotation}deg);
+    element.style.left = `${position.x}px`;
+    element.style.top = `${position.y}px`;
+    element.style.transform = `rotate(${position.rotation}deg)`;
     element.dataset.direction = position.direction;
     
     // Top section with pips
@@ -252,7 +252,7 @@ const BoardRenderer = {
     const board = document.getElementById('board');
     const placeholder = document.createElement('div');
     placeholder.className = 'starting-tile-placeholder';
-    placeholder.innerHTML = 
+    placeholder.innerHTML = `
       <div style="text-align: center;">
         <div style="font-size: 48px; margin-bottom: 10px;">🁣</div>
         <div style="font-size: 24px; font-weight: bold;">6 | 6</div>
@@ -260,8 +260,8 @@ const BoardRenderer = {
           Waiting for first move...
         </div>
       </div>
-    ;
-    placeholder.style.cssText = 
+    `;
+    placeholder.style.cssText = `
       position: absolute;
       left: 50%;
       top: 50%;
@@ -270,7 +270,7 @@ const BoardRenderer = {
       border: 3px dashed rgba(255,255,255,0.3);
       border-radius: 15px;
       background: rgba(255,255,255,0.05);
-    ;
+    `;
     board.appendChild(placeholder);
   },
   
@@ -292,7 +292,7 @@ const BoardRenderer = {
     const leftZone = document.createElement('div');
     leftZone.className = 'drop-zone';
     leftZone.dataset.side = 'left';
-    leftZone.style.cssText = 
+    leftZone.style.cssText = `
       position: absolute;
       width: 60px;
       height: 90px;
@@ -302,7 +302,7 @@ const BoardRenderer = {
       opacity: 0;
       transition: opacity 0.3s;
       pointer-events: all;
-    ;
+    `;
     
     // Position left zone
     const firstRect = firstDomino.getBoundingClientRect();
@@ -310,12 +310,12 @@ const BoardRenderer = {
     const firstDir = firstDomino.dataset.direction || 'right';
     
     if (firstDir === 'right') {
-      leftZone.style.left = ${firstRect.left - boardRect.left - 70}px;
-      leftZone.style.top = ${firstRect.top - boardRect.top - 5}px;
+      leftZone.style.left = `${firstRect.left - boardRect.left - 70}px`;
+      leftZone.style.top = `${firstRect.top - boardRect.top - 5}px`;
     } else {
       // Adjust for other directions
-      leftZone.style.left = ${firstRect.left - boardRect.left - 35}px;
-      leftZone.style.top = ${firstRect.top - boardRect.top - 70}px;
+      leftZone.style.left = `${firstRect.left - boardRect.left - 35}px`;
+      leftZone.style.top = `${firstRect.top - boardRect.top - 70}px`;
     }
     
     // Create right drop zone
@@ -329,12 +329,12 @@ const BoardRenderer = {
     const lastDir = lastDomino.dataset.direction || 'right';
     
     if (lastDir === 'right') {
-      rightZone.style.left = ${lastRect.right - boardRect.left + 10}px;
-      rightZone.style.top = ${lastRect.top - boardRect.top - 5}px;
+      rightZone.style.left = `${lastRect.right - boardRect.left + 10}px`;
+      rightZone.style.top = `${lastRect.top - boardRect.top - 5}px`;
     } else {
       // Adjust for other directions
-      rightZone.style.left = ${lastRect.left - boardRect.left - 35}px;
-      rightZone.style.top = ${lastRect.bottom - boardRect.top + 10}px;
+      rightZone.style.left = `${lastRect.left - boardRect.left - 35}px`;
+      rightZone.style.top = `${lastRect.bottom - boardRect.top + 10}px`;
     }
     
     board.appendChild(leftZone);

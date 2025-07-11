@@ -58,7 +58,7 @@ const GameManager = {
     if (GameState.isMyTurn()) {
       UIManager.setStatus('Your turn! Play the double-six (6|6)');
     } else {
-      UIManager.setStatus(Waiting for Seat ${data.startingSeat} to play...);
+      UIManager.setStatus(`Waiting for Seat ${data.startingSeat} to play...`);
     }
     
     UIManager.addMessage('New round started!');
@@ -93,7 +93,7 @@ const GameManager = {
     
     // Add message
     if (data.seat >= 0 && data.tile) {
-      UIManager.addMessage(Seat ${data.seat} played ${data.tile[0]}|${data.tile[1]});
+      UIManager.addMessage(`Seat ${data.seat} played ${data.tile[0]}|${data.tile[1]}`);
     }
   },
   
@@ -126,7 +126,7 @@ const GameManager = {
         }, 500);
       }
     } else {
-      UIManager.setStatus(Waiting for Seat ${turn}...);
+      UIManager.setStatus(`Waiting for Seat ${turn}...`);
     }
     
     // Update hand display
@@ -137,7 +137,7 @@ const GameManager = {
    * Handle player passed
    */
   handlePlayerPassed(data) {
-    UIManager.addMessage(Seat ${data.seat} passed);
+    UIManager.addMessage(`Seat ${data.seat} passed`);
   },
   
   /**
@@ -154,10 +154,10 @@ const GameManager = {
     UIManager.updateScores(data.scores);
     
     // Show result
-    const message = Seat ${data.winner} wins the round! (${data.reason}) +${data.points} points;
+    const message = `Seat ${data.winner} wins the round! (${data.reason}) +${data.points} points`;
     UIManager.setStatus(message);
     UIManager.addMessage(message);
-    UIManager.addMessage(Scores - Team 0: ${data.scores[0]}, Team 1: ${data.scores[1]});
+    UIManager.addMessage(`Scores - Team 0: ${data.scores[0]}, Team 1: ${data.scores[1]}`);
   },
   
   /**
@@ -171,14 +171,14 @@ const GameManager = {
     sessionStorage.removeItem('domino_mySeat');
     
     // Show result
-    const message = Game Over! Team ${data.winningTeam} wins!;
+    const message = `Game Over! Team ${data.winningTeam} wins!`;
     UIManager.setStatus(message);
     UIManager.addMessage(message);
-    UIManager.addMessage(Final Scores - Team 0: ${data.scores[0]}, Team 1: ${data.scores[1]});
+    UIManager.addMessage(`Final Scores - Team 0: ${data.scores[0]}, Team 1: ${data.scores[1]}`);
     
     // Alert and offer new game
     setTimeout(() => {
-      alert(${message}\n\nFinal Scores:\nTeam 0: ${data.scores[0]}\nTeam 1: ${data.scores[1]});
+      alert(`${message}\n\nFinal Scores:\nTeam 0: ${data.scores[0]}\nTeam 1: ${data.scores[1]}`);
       
       if (confirm('Start a new game?')) {
         location.reload();

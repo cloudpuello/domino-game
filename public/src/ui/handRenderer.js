@@ -15,7 +15,7 @@ const HandRenderer = {
   renderAllHands() {
     // Clear all hands
     for (let i = 0; i < 4; i++) {
-      const handElement = document.getElementById(hand${i});
+      const handElement = document.getElementById(`hand${i}`);
       if (handElement) {
         handElement.innerHTML = '';
         handElement.classList.remove('current-player');
@@ -29,7 +29,7 @@ const HandRenderer = {
     
     // Highlight current player
     if (GameState.currentTurn !== null) {
-      const currentHand = document.getElementById(hand${GameState.currentTurn});
+      const currentHand = document.getElementById(`hand${GameState.currentTurn}`);
       if (currentHand) {
         currentHand.classList.add('current-player');
       }
@@ -40,7 +40,7 @@ const HandRenderer = {
    * Render a specific player's hand
    */
   renderPlayerHand(seat) {
-    const handElement = document.getElementById(hand${seat});
+    const handElement = document.getElementById(`hand${seat}`);
     if (!handElement) return;
     
     if (seat === GameState.mySeat) {
@@ -98,7 +98,7 @@ const HandRenderer = {
       
       // Add back pattern
       const pattern = document.createElement('div');
-      pattern.style.cssText = 
+      pattern.style.cssText = `
         width: 100%;
         height: 100%;
         background-image: 
@@ -117,7 +117,7 @@ const HandRenderer = {
             rgba(255,255,255,0.05) 6px
           );
         border-radius: 3px;
-      ;
+      `;
       dummy.appendChild(pattern);
       handElement.appendChild(dummy);
     }
@@ -155,14 +155,14 @@ const HandRenderer = {
   createPipPattern(value) {
     const container = document.createElement('div');
     container.className = 'pip-container';
-    container.style.cssText = 
+    container.style.cssText = `
       position: relative;
       width: 100%;
       height: 100%;
       display: flex;
       align-items: center;
       justify-content: center;
-    ;
+    `;
     
     // Pip patterns for each value (0-6)
     const patterns = {
@@ -181,7 +181,7 @@ const HandRenderer = {
     positions.forEach(([x, y]) => {
       const pip = document.createElement('div');
       pip.className = 'pip';
-      pip.style.cssText = 
+      pip.style.cssText = `
         position: absolute;
         width: 4px;
         height: 4px;
@@ -190,7 +190,7 @@ const HandRenderer = {
         left: ${x * 100}%;
         top: ${y * 100}%;
         transform: translate(-50%, -50%);
-      ;
+      `;
       container.appendChild(pip);
     });
     

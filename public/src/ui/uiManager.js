@@ -63,7 +63,7 @@ const UIManager = {
    */
   injectStyles() {
     const style = document.createElement('style');
-    style.textContent = 
+    style.textContent = `
       .board-domino {
         position: absolute;
         width: 40px;
@@ -181,7 +181,7 @@ const UIManager = {
         background: #333;
         border-radius: 50%;
       }
-    ;
+    `;
     document.head.appendChild(style);
   },
   
@@ -231,13 +231,13 @@ const UIManager = {
             handElement.classList.add('my-hand');
           } else {
             const player = LobbyManager.players.find(p => p && p.seat === seat);
-            nameDiv.textContent = player ? ${player.name} (Seat ${seat}) : Seat ${seat};
+            nameDiv.textContent = player ? `${player.name} (Seat ${seat})` : `Seat ${seat}`;
           }
         }
         
         // Add position class for CSS styling
         handElement.className = 'player-hand-container';
-        handElement.classList.add(position-${position});
+        handElement.classList.add(`position-${position}`);
         if (seat === mySeat) {
           handElement.classList.add('my-hand');
         }
@@ -253,7 +253,7 @@ const UIManager = {
       const team = seat % 2;
       const partner = team === 0 ? (seat === 0 ? 2 : 0) : (seat === 1 ? 3 : 1);
       this.elements.playerInfo.textContent = 
-        You are Seat ${seat} (Team ${team} with Seat ${partner});
+        `You are Seat ${seat} (Team ${team} with Seat ${partner})`;
     }
     
     // Remap positions so player is at bottom with correct clockwise order
@@ -296,7 +296,7 @@ const UIManager = {
   addMessage(text) {
     if (this.elements.messages) {
       const msg = document.createElement('div');
-      msg.textContent = [${new Date().toLocaleTimeString()}] ${text};
+      msg.textContent = `[${new Date().toLocaleTimeString()}] ${text}`;
       this.elements.messages.prepend(msg);
       
       // Keep only last 50 messages
