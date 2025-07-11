@@ -243,14 +243,22 @@ body {
 }
 
 /* FIX 1: Explicit heights for side players */
-#leftPlayer,
-#rightPlayer {
+#leftPlayer {
   grid-area: left-player;
-  height: 100%; /* Take full grid area height */
-  min-height: 500px; /* Minimum height to fit 7 dominoes */
-  max-height: 600px; /* Maximum height */
+  height: 100%; 
+  min-height: 500px;
+  max-height: 600px;
   /* DEBUG: Temporary border */
-  /* border: 2px dashed red; */
+  border: 2px dashed red;
+}
+
+#rightPlayer {
+  grid-area: right-player;
+  height: 100%; 
+  min-height: 500px;
+  max-height: 600px;
+  /* DEBUG: Temporary border */
+  border: 2px dashed red;
 }
 
 #rightPlayer {
@@ -309,26 +317,36 @@ body {
   height: 100px; /* Fixed height */
 }
 
-/* FINAL FIX: Side players use horizontal wrap layout for clear counting */
+/* FIXED: CSS Grid approach for side players */
 .position-left .player-hand-container,
 .position-right .player-hand-container {
-  flex-direction: row; /* 🔥 Horizontal like top/bottom */
-  flex-wrap: wrap; /* Wrap to new lines */
-  justify-content: center;
-  align-items: center;
-  align-content: center; /* Center wrapped content */
-  height: calc(100% - 32px);
-  width: 100%;
+  display: grid;
+  /* Create columns that fit 30px dominoes with auto-wrapping */
+  grid-template-columns: repeat(auto-fill, minmax(34px, 1fr));
+  gap: 5px;
   padding: 8px;
-  gap: 4px; /* Same as top/bottom */
-  overflow: auto;
+  place-items: center; /* Centers dominoes in their grid cells */
+  /* CRITICAL: Proper container sizing */
+  width: 100%;
+  height: calc(100% - 32px); /* Account for player name */
+  overflow-y: auto;
+  align-content: start; /* Start from top of container */
+  /* DEBUG: Temporary borders to see grid */
+  border: 2px dashed yellow;
+  background: rgba(255, 255, 0, 0.1);
 }
 
-/* Side dominoes use same styling as top/bottom */
+/* Clean domino styling for grid */
 .position-left .hand-domino,
 .position-right .hand-domino {
-  margin: 3px; /* Same as top/bottom */
-  transform: none; /* No rotation - keep them flat */
+  margin: 0; /* Grid gap handles spacing */
+  transform: none; /* Keep flat, no rotation */
+  /* Ensure consistent size */
+  width: 30px;
+  height: 60px;
+  flex-shrink: 0;
+  /* DEBUG: Temporary border */
+  border: 2px solid blue !important;
 }
 
 /* FIX 4: Hand dominoes with consistent sizing and no stacking */
