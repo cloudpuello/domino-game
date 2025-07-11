@@ -1,246 +1,14 @@
 /* =====================================================================
- * FIXED CSS - Explicit Heights and Proper Container Sizing
+ * FIXED CSS - Side Player Hands Layout Fix
  * 
  * FIXES APPLIED:
- * 1. Set explicit heights for side player containers
- * 2. Proper overflow behavior with defined heights
- * 3. Better flex layout control
- * 4. Debug borders (can be removed later)
+ * 1. Removed conflicting grid layout for side players
+ * 2. Using simple flex column layout
+ * 3. Proper spacing between dominoes
+ * 4. Correct rotation without overlap
  * =================================================================== */
 
-:root {
-  --primary-green: #1a5f3f;
-  --secondary-green: #2d7a5c;
-  --accent-gold: #d4af37;
-  --accent-light: #f4e677;
-  --table-felt: linear-gradient(135deg, #1a5f3f 0%, #0f3d28 100%);
-  --panel-bg: #ffffff;
-  --card-bg: #f8f9fa;
-  --domino-face: #fefefe;
-  --domino-border: #2a2a2a;
-  --pip-color: #1a1a1a;
-  --text-primary: #2c3e50;
-  --text-secondary: #6c757d;
-  --text-light: #ffffff;
-  --success: #27ae60;
-  --warning: #f39c12;
-  --error: #e74c3c;
-  --info: #3498db;
-  --shadow-sm: 0 2px 4px rgba(0,0,0,0.1);
-  --shadow-md: 0 4px 12px rgba(0,0,0,0.15);
-  --shadow-lg: 0 8px 24px rgba(0,0,0,0.2);
-  --transition-fast: 0.15s ease-out;
-  --transition-normal: 0.25s ease-out;
-  --space-xs: 0.25rem;
-  --space-sm: 0.5rem;
-  --space-md: 1rem;
-  --space-lg: 1.5rem;
-  --space-xl: 2rem;
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 16px;
-}
-
-/* Reset and Base */
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
-*:focus {
-  outline: 2px solid var(--accent-gold);
-  outline-offset: 2px;
-}
-
-body {
-  font-family: 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif;
-  background: var(--table-felt);
-  color: var(--text-primary);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 100vh;
-  padding: var(--space-md);
-  user-select: none;
-  overflow: hidden;
-}
-
-/* Main Layout */
-.game-container {
-  display: grid;
-  grid-template-columns: 280px 1fr;
-  gap: var(--space-lg);
-  width: 100%;
-  max-width: 1600px;
-  height: 95vh;
-  max-height: 1000px;
-  filter: drop-shadow(var(--shadow-lg));
-}
-
-/* Info Panel */
-.info-panel {
-  background: var(--panel-bg);
-  border-radius: var(--radius-lg);
-  padding: var(--space-lg);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-lg);
-  box-shadow: var(--shadow-lg);
-  overflow-y: auto;
-  border: 1px solid rgba(255,255,255,0.1);
-}
-
-.info-section {
-  background: var(--card-bg);
-  border-radius: var(--radius-md);
-  padding: var(--space-md);
-  border-left: 4px solid var(--accent-gold);
-}
-
-.info-section h1 {
-  font-size: 1.75rem;
-  font-weight: 600;
-  color: var(--primary-green);
-  margin-bottom: var(--space-sm);
-  text-align: center;
-}
-
-.info-section h3 {
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin-bottom: var(--space-sm);
-}
-
-/* Status and Messages */
-#playerInfo {
-  font-weight: 500;
-  color: var(--text-secondary);
-  text-align: center;
-  padding: var(--space-sm);
-  background: linear-gradient(135deg, #e8f5e8 0%, #f0f8f0 100%);
-  border-radius: var(--radius-sm);
-}
-
-#status {
-  font-weight: 600;
-  font-size: 1.2rem;
-  color: var(--primary-green);
-  text-align: center;
-  padding: var(--space-md);
-  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-  border-radius: var(--radius-md);
-  border: 2px solid var(--accent-gold);
-  box-shadow: var(--shadow-sm);
-}
-
-#errors {
-  color: var(--error);
-  font-weight: 600;
-  text-align: center;
-  padding: var(--space-sm);
-  border-radius: var(--radius-sm);
-  background: rgba(231, 76, 60, 0.1);
-  border: 1px solid rgba(231, 76, 60, 0.3);
-  min-height: 1.5em;
-}
-
-#messages {
-  max-height: 200px;
-  overflow-y: auto;
-  font-size: 0.9rem;
-  background: #f8f9fa;
-  border-radius: var(--radius-sm);
-  padding: var(--space-sm);
-}
-
-/* Score Display */
-.score-display {
-  display: flex;
-  gap: var(--space-md);
-  justify-content: space-between;
-}
-
-.score-box {
-  flex: 1;
-  text-align: center;
-  padding: var(--space-md);
-  border-radius: var(--radius-md);
-  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
-  border: 2px solid #e9ecef;
-  border-bottom: 4px solid;
-  box-shadow: var(--shadow-sm);
-}
-
-.your-team-color {
-  border-bottom-color: var(--success);
-}
-
-.opponent-team-color {
-  border-bottom-color: var(--error);
-}
-
-.score-box span {
-  font-size: 0.85rem;
-  font-weight: 500;
-  color: var(--text-secondary);
-  display: block;
-  margin-bottom: var(--space-xs);
-}
-
-.score-box strong {
-  font-size: 2rem;
-  font-weight: 700;
-  color: var(--text-primary);
-  display: block;
-}
-
-/* Game Table Layout - WIDER SIDES for better domino display */
-.game-table {
-  display: grid;
-  grid-template-columns: 180px 1fr 180px; /* 🔥 WIDER sides: 120px → 180px */
-  grid-template-rows: 100px 1fr 140px;
-  grid-template-areas:
-    "top-player top-player top-player"
-    "left-player board right-player"
-    "player-hand player-hand player-hand";
-  gap: var(--space-md);
-  background: var(--table-felt);
-  border-radius: var(--radius-xl);
-  padding: var(--space-lg);
-  box-shadow: inset 0 0 0 3px rgba(255,255,255,0.1);
-}
-
-/* Player Areas - FIXED with explicit heights */
-.player-area {
-  color: var(--text-light);
-  padding: var(--space-sm);
-  text-align: center;
-  background: rgba(255,255,255,0.1);
-  border-radius: var(--radius-md);
-  border: 1px solid rgba(255,255,255,0.2);
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
-  align-items: center;
-  font-weight: 500;
-  /* DEBUG: Temporary borders to see layout */
-  /* border: 2px dashed red; */
-}
-
-.player-area .player-name {
-  font-size: 12px;
-  margin-bottom: 8px;
-  font-weight: 600;
-  flex-shrink: 0;
-}
-
-#topPlayer {
-  grid-area: top-player;
-  height: 100px; /* Explicit height */
-}
+/* Replace the problematic CSS rules with these fixed versions */
 
 /* FIX 1: Explicit heights for side players */
 #leftPlayer {
@@ -248,8 +16,6 @@ body {
   height: 100%; 
   min-height: 500px;
   max-height: 600px;
-  /* DEBUG: Temporary border */
-  border: 2px dashed red;
 }
 
 #rightPlayer {
@@ -257,19 +23,6 @@ body {
   height: 100%; 
   min-height: 500px;
   max-height: 600px;
-  /* DEBUG: Temporary border */
-  border: 2px dashed red;
-}
-
-#rightPlayer {
-  grid-area: right-player;
-}
-
-#bottomPlayer {
-  grid-area: player-hand;
-  background: rgba(76, 175, 80, 0.15);
-  border: 2px solid rgba(76, 175, 80, 0.5);
-  height: 140px; /* Explicit height */
 }
 
 /* FIX 2: Player Hand Containers with proper height control */
@@ -284,278 +37,101 @@ body {
   justify-content: center;
   flex: 1;
   width: 100%;
-  /* DEBUG: Temporary border */
-  /* border: 2px dashed yellow; */
 }
 
-.player-hand-container.current-player {
-  border-color: #ffd700;
-  background: rgba(255,215,0,0.2);
-  box-shadow: 0 0 15px rgba(255,215,0,0.5);
-}
-
-.player-hand-container.my-hand {
-  background: rgba(76, 175, 80, 0.1);
-  border-color: rgba(76, 175, 80, 0.3);
-}
-
-/* Top player - horizontal layout */
-.position-top .player-hand-container {
-  flex-direction: row;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 4px;
-  height: 80px; /* Fixed height */
-}
-
-/* Bottom player (me) - horizontal layout */
-.position-bottom .player-hand-container {
-  flex-direction: row;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 4px;
-  height: 100px; /* Fixed height */
-}
-
-/* FIXED: CSS Grid approach for side players */
+/* FIXED: Side player containers - simple flex column */
 .position-left .player-hand-container,
 .position-right .player-hand-container {
-  display: grid;
-  /* Create columns that fit 30px dominoes with auto-wrapping */
-  grid-template-columns: repeat(auto-fill, minmax(34px, 1fr));
-  gap: 5px;
-  padding: 8px;
-  place-items: center; /* Centers dominoes in their grid cells */
-  /* CRITICAL: Proper container sizing */
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 10px; /* Space between dominoes */
+  padding: 15px 8px;
   width: 100%;
-  height: calc(100% - 32px); /* Account for player name */
+  height: calc(100% - 40px); /* Account for player name */
   overflow-y: auto;
-  align-content: start; /* Start from top of container */
-  /* DEBUG: Temporary borders to see grid */
-  border: 2px dashed yellow;
-  background: rgba(255, 255, 0, 0.1);
+  overflow-x: hidden;
 }
 
-/* Clean domino styling for grid */
+/* FIXED: Side player dominoes - no overlap */
 .position-left .hand-domino,
 .position-right .hand-domino {
-  margin: 0; /* Grid gap handles spacing */
-  transform: none; /* Keep flat, no rotation */
-  /* Ensure consistent size */
   width: 30px;
   height: 60px;
-  flex-shrink: 0;
-  /* DEBUG: Temporary border */
-  border: 2px solid blue !important;
-}
-
-/* FIX 4: Hand dominoes with consistent sizing and no stacking */
-.hand-domino {
-  width: 30px;
-  height: 60px;
-  background: linear-gradient(135deg, #ffffff 0%, #f0f0f0 100%);
-  border: 2px solid #333;
-  border-radius: 6px;
-  display: flex;
-  flex-direction: column;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-  position: relative;
+  margin: 0; /* Gap handles spacing */
   flex-shrink: 0; /* Prevent shrinking */
-  /* DEBUG: Temporary border */
-  /* border: 2px solid blue; */
+  position: relative; /* Ensure proper stacking context */
 }
 
-/* Remove margins for side players since we use gap */
-.position-left .hand-domino,
+/* Apply rotation with proper transform origin */
+.position-left .hand-domino {
+  transform: rotate(90deg);
+  transform-origin: center center;
+}
+
 .position-right .hand-domino {
-  margin: 0;
+  transform: rotate(-90deg);
+  transform-origin: center center;
 }
 
-/* Horizontal layouts keep margin for spacing */
-.position-top .hand-domino,
-.position-bottom .hand-domino {
-  margin: 3px;
+/* Hover states with rotation maintained */
+.position-left .hand-domino:hover {
+  transform: rotate(90deg) scale(1.1);
+  z-index: 10; /* Ensure hover domino is on top */
 }
 
-.hand-domino:hover {
-  transform: scale(1.05) translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-}
-
-.hand-domino.playable {
-  border-color: #ffd700;
-  box-shadow: 0 0 8px rgba(255, 215, 0, 0.5);
-  cursor: grab;
-}
-
-.hand-domino.playable:hover {
-  border-color: #ffed4e;
-  box-shadow: 0 0 12px rgba(255, 215, 0, 0.8);
-  transform: scale(1.1) translateY(-3px);
-}
-
-.hand-domino.disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  filter: grayscale(0.3);
-}
-
-.hand-domino.dummy {
-  background: linear-gradient(135deg, #4a5568 0%, #2d3748 100%);
-  border: 2px solid #1a202c;
-  cursor: default;
-}
-
-.hand-domino.dummy:hover {
-  transform: none;
-}
-
-/* Game Board */
-#board {
-  grid-area: board;
-  position: relative;
-  background: radial-gradient(circle at center, rgba(255,255,255,0.05) 0%, transparent 70%);
-  border-radius: var(--radius-lg);
-  padding: var(--space-lg);
-  min-height: 350px;
-  border: 2px solid rgba(255,255,255,0.1);
-  box-shadow: inset 0 4px 8px rgba(0,0,0,0.2);
-}
-
-/* Board Dominoes */
-.board-domino {
-  position: absolute;
-  width: 50px;
-  height: 100px;
-  background: linear-gradient(135deg, #ffffff 0%, #f0f0f0 100%);
-  border: 3px solid #333;
-  border-radius: 8px;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+.position-right .hand-domino:hover {
+  transform: rotate(-90deg) scale(1.1);
   z-index: 10;
 }
 
-/* Domino halves */
-.domino-section {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  min-height: 28px;
+/* Playable states with rotation maintained */
+.position-left .hand-domino.playable:hover {
+  transform: rotate(90deg) scale(1.15);
+  z-index: 10;
 }
 
-.domino-section.top {
-  border-bottom: 1px solid #333;
+.position-right .hand-domino.playable:hover {
+  transform: rotate(-90deg) scale(1.15);
+  z-index: 10;
 }
 
-/* Dragging States */
-body.dragging {
-  cursor: grabbing !important;
-  user-select: none;
+/* Ensure dummy tiles also follow the same layout */
+.position-left .hand-domino.dummy,
+.position-right .hand-domino.dummy {
+  width: 30px;
+  height: 60px;
+  margin: 0;
+  flex-shrink: 0;
 }
 
-body.dragging * {
-  cursor: inherit !important;
+/* Remove any grid-related styles that were causing issues */
+.position-left .player-hand-container:not(.grid-fix),
+.position-right .player-hand-container:not(.grid-fix) {
+  display: flex !important;
+  grid-template-columns: unset !important;
 }
 
-/* Lobby */
-#lobbyContainer {
-  display: none;
+/* Scrollbar styling for side containers */
+.position-left .player-hand-container::-webkit-scrollbar,
+.position-right .player-hand-container::-webkit-scrollbar {
+  width: 6px;
 }
 
-#lobbyList {
-  list-style: none;
-  background: #f8f9fa;
-  border-radius: var(--radius-sm);
-  padding: var(--space-sm);
+.position-left .player-hand-container::-webkit-scrollbar-track,
+.position-right .player-hand-container::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
 }
 
-#lobbyList li {
-  padding: var(--space-xs) var(--space-sm);
-  border-bottom: 1px solid #e9ecef;
-  color: var(--text-secondary);
-  font-weight: 500;
+.position-left .player-hand-container::-webkit-scrollbar-thumb,
+.position-right .player-hand-container::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 3px;
 }
 
-/* Responsive Design */
-@media (max-width: 1200px) {
-  .game-container {
-    grid-template-columns: 260px 1fr;
-  }
-  
-  .board-domino {
-    width: 40px;
-    height: 80px;
-  }
-  
-  .hand-domino {
-    width: 26px;
-    height: 52px;
-  }
-  
-  #leftPlayer,
-  #rightPlayer {
-    min-height: 400px;
-  }
-}
-
-@media (max-width: 768px) {
-  .game-container {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto 1fr;
-    height: 100vh;
-  }
-  
-  .info-panel {
-    order: 2;
-    max-height: 200px;
-  }
-  
-  .game-table {
-    order: 1;
-    grid-template-areas:
-      "top-player"
-      "board"
-      "left-player right-player" 
-      "player-hand";
-  }
-  
-  .hand-domino {
-    width: 22px;
-    height: 44px;
-  }
-  
-  #leftPlayer,
-  #rightPlayer {
-    min-height: 300px;
-  }
-}
-
-/* Animations */
-@keyframes slideIn {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* Utility Classes */
-.visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
+.position-left .player-hand-container::-webkit-scrollbar-thumb:hover,
+.position-right .player-hand-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.5);
 }

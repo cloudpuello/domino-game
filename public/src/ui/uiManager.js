@@ -1,12 +1,11 @@
 /* =====================================================================
- * src/ui/uiManager.js — Handles All UI Updates (COMPLETELY FIXED)
+ * src/ui/uiManager.js — Handles All UI Updates (FIXED)
  * 
  * FIXES APPLIED:
- * - Fixed clockwise seating arrangement
- * - Better position remapping for player hands
- * - Improved visual feedback and status updates
- * - Better error handling and messaging
- * - Fixed side hand styling and positioning
+ * - Fixed side player hand stacking issue
+ * - Proper rotation without overlap
+ * - Better CSS injection that doesn't conflict
+ * - Consistent spacing and layout
  * =================================================================== */
 
 const UIManager = {
@@ -59,7 +58,7 @@ const UIManager = {
   },
   
   /**
-   * FIXED: Inject dynamic CSS with better styling
+   * FIXED: Inject dynamic CSS without conflicts
    */
   injectDynamicStyles() {
     const style = document.createElement('style');
@@ -84,20 +83,20 @@ const UIManager = {
         box-shadow: 0 5px 15px rgba(0,0,0,0.4);
       }
       
-      /* Hand domino styling */
+      /* Override any conflicting hand domino styles */
       .hand-domino {
-        width: 30px;
-        height: 60px;
+        width: 30px !important;
+        height: 60px !important;
         background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 50%, #e9ecef 100%);
         border: 2px solid #333;
         border-radius: 4px;
-        margin: 2px;
-        display: inline-flex;
+        display: flex !important;
         flex-direction: column;
         cursor: pointer;
         transition: all 0.2s ease;
         position: relative;
         box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+        flex-shrink: 0 !important;
       }
       
       .hand-domino:hover {
@@ -138,7 +137,7 @@ const UIManager = {
         border-bottom: 1px solid #333;
       }
       
-      /* Player hand containers */
+      /* Player hand containers base styles */
       .player-hand-container {
         min-height: 80px;
         padding: 10px;
@@ -173,48 +172,61 @@ const UIManager = {
         border-color: rgba(76, 175, 80, 0.3);
       }
       
-      /* FIXED: Side hands spanning properly */
+      /* FIXED: Side hands - ensure flex column with proper spacing */
       .position-left .player-hand-container,
       .position-right .player-hand-container {
-        flex-direction: column;
-        justify-content: flex-start;
-        align-items: center;
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: flex-start !important;
+        align-items: center !important;
+        gap: 10px !important;
+        flex-wrap: nowrap !important;
         height: 100%;
         min-height: 300px;
-        max-height: 400px;
+        max-height: 500px;
         padding: 15px 8px;
         overflow-y: auto;
+        overflow-x: hidden;
       }
       
+      /* FIXED: Side dominoes with no overlap */
       .position-left .hand-domino,
       .position-right .hand-domino {
-        margin: 4px 0;
-        transform-origin: center;
+        margin: 0 !important;
+        flex-shrink: 0 !important;
+        position: relative !important;
       }
       
       /* Rotate dominoes for side players */
       .position-left .hand-domino {
         transform: rotate(90deg);
+        transform-origin: center center;
       }
       
       .position-right .hand-domino {
         transform: rotate(-90deg);
+        transform-origin: center center;
       }
       
+      /* Maintain rotation on hover */
       .position-left .hand-domino:hover {
-        transform: rotate(90deg) scale(1.05) translateY(-2px);
+        transform: rotate(90deg) scale(1.1);
+        z-index: 10;
       }
       
       .position-right .hand-domino:hover {
-        transform: rotate(-90deg) scale(1.05) translateY(-2px);
+        transform: rotate(-90deg) scale(1.1);
+        z-index: 10;
       }
       
       .position-left .hand-domino.playable:hover {
-        transform: rotate(90deg) scale(1.1) translateY(-3px);
+        transform: rotate(90deg) scale(1.15);
+        z-index: 10;
       }
       
       .position-right .hand-domino.playable:hover {
-        transform: rotate(-90deg) scale(1.1) translateY(-3px);
+        transform: rotate(-90deg) scale(1.15);
+        z-index: 10;
       }
       
       /* Pip container for domino dots */
@@ -267,12 +279,29 @@ const UIManager = {
         animation: placeholderPulse 2s ease-in-out infinite;
       }
       
-      /* Celebration animation */
-      @keyframes celebration {
-        0%, 100% { transform: scale(1); }
-        25% { transform: scale(1.1) rotate(2deg); }
-        50% { transform: scale(1.05) rotate(-1deg); }
-        75% { transform: scale(1.1) rotate(1deg); }
+      /* Score update animation */
+      @keyframes scoreUpdate {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.2); color: var(--accent-gold); }
+        100% { transform: scale(1); }
+      }
+      
+      /* Shake animation for errors */
+      @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+        20%, 40%, 60%, 80% { transform: translateX(5px); }
+      }
+      
+      /* Slide animations */
+      @keyframes slideInRight {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+      }
+      
+      @keyframes slideOutRight {
+        from { transform: translateX(0); opacity: 1; }
+        to { transform: translateX(100%); opacity: 0; }
       }
       
       /* Dragging state */
@@ -294,8 +323,7 @@ const UIManager = {
   remapPositions(mySeat) {
     console.log('UIManager: Remapping positions for seat', mySeat);
     
-    // FIXED: Define correct clockwise order from player's perspective
-    // You are always at bottom, then going clockwise: left, top, right
+    // Define correct clockwise order from player's perspective
     const seatMapping = {
       bottom: mySeat,           // You
       left: (mySeat + 1) % 4,   // Next player clockwise (to your left)
@@ -387,125 +415,3 @@ const UIManager = {
       }
     }
   },
-  
-  /**
-   * Show error message with better styling
-   */
-  showError(text) {
-    if (this.elements.errors) {
-      this.elements.errors.textContent = text;
-      this.elements.errors.style.background = 'rgba(231, 76, 60, 0.1)';
-      this.elements.errors.style.borderColor = 'rgba(231, 76, 60, 0.3)';
-      this.elements.errors.style.animation = 'shake 0.5s ease-in-out';
-      
-      setTimeout(() => {
-        this.elements.errors.textContent = '';
-        this.elements.errors.style.animation = '';
-      }, 4000);
-    }
-  },
-  
-  /**
-   * Hide error message
-   */
-  hideError() {
-    if (this.elements.errors) {
-      this.elements.errors.textContent = '';
-      this.elements.errors.style.animation = '';
-    }
-  },
-  
-  /**
-   * Add message to log with timestamp
-   */
-  addMessage(text) {
-    if (this.elements.messages) {
-      const msg = document.createElement('div');
-      msg.style.cssText = `
-        padding: 4px 0;
-        border-bottom: 1px solid #e9ecef;
-        font-size: 13px;
-        animation: slideIn 0.3s ease-out;
-      `;
-      
-      const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      msg.innerHTML = `<span style="color: #6c757d;">[${time}]</span> ${text}`;
-      
-      this.elements.messages.insertBefore(msg, this.elements.messages.firstChild);
-      
-      // Keep only last 50 messages
-      while (this.elements.messages.children.length > 50) {
-        this.elements.messages.lastChild.remove();
-      }
-    }
-  },
-  
-  /**
-   * Show/hide lobby
-   */
-  showLobby(show) {
-    if (this.elements.lobbyContainer) {
-      this.elements.lobbyContainer.style.display = show ? 'block' : 'none';
-    }
-  },
-  
-  /**
-   * Update scores with animation
-   */
-  updateScores(scores) {
-    if (this.elements.team0Score) {
-      const newScore = scores[0] || 0;
-      if (parseInt(this.elements.team0Score.textContent) !== newScore) {
-        this.elements.team0Score.style.animation = 'scoreUpdate 0.5s ease-in-out';
-        setTimeout(() => {
-          this.elements.team0Score.style.animation = '';
-        }, 500);
-      }
-      this.elements.team0Score.textContent = newScore;
-    }
-    
-    if (this.elements.team1Score) {
-      const newScore = scores[1] || 0;
-      if (parseInt(this.elements.team1Score.textContent) !== newScore) {
-        this.elements.team1Score.style.animation = 'scoreUpdate 0.5s ease-in-out';
-        setTimeout(() => {
-          this.elements.team1Score.style.animation = '';
-        }, 500);
-      }
-      this.elements.team1Score.textContent = newScore;
-    }
-  },
-  
-  /**
-   * Show temporary notification
-   */
-  showNotification(text, type = 'info', duration = 3000) {
-    const notification = document.createElement('div');
-    notification.style.cssText = `
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      padding: 15px 20px;
-      background: ${type === 'error' ? '#e74c3c' : type === 'success' ? '#27ae60' : '#3498db'};
-      color: white;
-      border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-      z-index: 10000;
-      font-weight: bold;
-      animation: slideInRight 0.3s ease-out;
-      max-width: 300px;
-    `;
-    
-    notification.textContent = text;
-    document.body.appendChild(notification);
-    
-    setTimeout(() => {
-      notification.style.animation = 'slideOutRight 0.3s ease-in';
-      setTimeout(() => {
-        if (notification.parentNode) {
-          notification.remove();
-        }
-      }, 300);
-    }, duration);
-  }
-};
