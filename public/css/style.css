@@ -1,10 +1,11 @@
 /* =====================================================================
- * Fixed CSS - Proper Vertical Spacing for Side Players
+ * FIXED CSS - Explicit Heights and Proper Container Sizing
  * 
- * FIXES:
- * - Side player dominoes are now evenly spaced vertically
- * - No more stacking - each domino is clearly visible
- * - Players can easily count their dominoes (7, then 6, etc.)
+ * FIXES APPLIED:
+ * 1. Set explicit heights for side player containers
+ * 2. Proper overflow behavior with defined heights
+ * 3. Better flex layout control
+ * 4. Debug borders (can be removed later)
  * =================================================================== */
 
 :root {
@@ -212,7 +213,7 @@ body {
   box-shadow: inset 0 0 0 3px rgba(255,255,255,0.1);
 }
 
-/* Player Areas */
+/* Player Areas - FIXED with explicit heights */
 .player-area {
   color: var(--text-light);
   padding: var(--space-sm);
@@ -225,6 +226,8 @@ body {
   justify-content: flex-start;
   align-items: center;
   font-weight: 500;
+  /* DEBUG: Temporary borders to see layout */
+  /* border: 2px dashed red; */
 }
 
 .player-area .player-name {
@@ -236,10 +239,18 @@ body {
 
 #topPlayer {
   grid-area: top-player;
+  height: 100px; /* Explicit height */
 }
 
-#leftPlayer {
+/* FIX 1: Explicit heights for side players */
+#leftPlayer,
+#rightPlayer {
   grid-area: left-player;
+  height: 100%; /* Take full grid area height */
+  min-height: 500px; /* Minimum height to fit 7 dominoes */
+  max-height: 600px; /* Maximum height */
+  /* DEBUG: Temporary border */
+  /* border: 2px dashed red; */
 }
 
 #rightPlayer {
@@ -250,9 +261,10 @@ body {
   grid-area: player-hand;
   background: rgba(76, 175, 80, 0.15);
   border: 2px solid rgba(76, 175, 80, 0.5);
+  height: 140px; /* Explicit height */
 }
 
-/* FIXED: Player Hand Containers with Proper Spacing */
+/* FIX 2: Player Hand Containers with proper height control */
 .player-hand-container {
   padding: 8px;
   border-radius: 6px;
@@ -264,6 +276,8 @@ body {
   justify-content: center;
   flex: 1;
   width: 100%;
+  /* DEBUG: Temporary border */
+  /* border: 2px dashed yellow; */
 }
 
 .player-hand-container.current-player {
@@ -283,7 +297,7 @@ body {
   flex-wrap: wrap;
   justify-content: center;
   gap: 4px;
-  min-height: 80px;
+  height: 80px; /* Fixed height */
 }
 
 /* Bottom player (me) - horizontal layout */
@@ -292,60 +306,27 @@ body {
   flex-wrap: wrap;
   justify-content: center;
   gap: 4px;
-  min-height: 80px;
+  height: 100px; /* Fixed height */
 }
 
-/* FIXED: Side players - proper vertical spacing */
+/* FIX 3: Side players with explicit height and proper overflow */
 .position-left .player-hand-container,
 .position-right .player-hand-container {
   flex-direction: column;
   justify-content: flex-start;
   align-items: center;
-  height: 100%;
+  height: calc(100% - 32px); /* Full height minus padding for name */
   width: 100%;
   padding: 10px 8px;
-  gap: 6px; /* KEY FIX: Proper spacing between dominoes */
-  overflow-y: auto;
+  gap: 8px; /* Increased gap for better spacing */
+  overflow-y: auto; /* Now this will work because we have explicit height */
+  scroll-behavior: smooth;
 }
 
-/* FIXED: Side player dominoes with consistent spacing */
-.position-left .hand-domino,
-.position-right .hand-domino {
-  margin: 0; /* Remove margin since we use gap now */
-  flex-shrink: 0; /* Prevent shrinking */
-  position: relative; /* Ensure proper positioning */
-}
-
-/* Game Board */
-#board {
-  grid-area: board;
-  position: relative;
-  background: radial-gradient(circle at center, rgba(255,255,255,0.05) 0%, transparent 70%);
-  border-radius: var(--radius-lg);
-  padding: var(--space-lg);
-  min-height: 350px;
-  border: 2px solid rgba(255,255,255,0.1);
-  box-shadow: inset 0 4px 8px rgba(0,0,0,0.2);
-}
-
-/* Board Dominoes */
-.board-domino {
-  position: absolute;
-  width: 50px;
-  height: 100px;
-  background: linear-gradient(135deg, #ffffff 0%, #f0f0f0 100%);
-  border: 3px solid #333;
-  border-radius: 8px;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-  z-index: 10;
-}
-
-/* FIXED: Hand Dominoes with consistent sizing */
+/* FIX 4: Hand dominoes with consistent sizing and no stacking */
 .hand-domino {
-  width: 32px;
-  height: 64px;
+  width: 30px;
+  height: 60px;
   background: linear-gradient(135deg, #ffffff 0%, #f0f0f0 100%);
   border: 2px solid #333;
   border-radius: 6px;
@@ -355,10 +336,18 @@ body {
   transition: all 0.2s ease;
   box-shadow: 0 2px 6px rgba(0,0,0,0.2);
   position: relative;
-  flex-shrink: 0;
+  flex-shrink: 0; /* Prevent shrinking */
+  /* DEBUG: Temporary border */
+  /* border: 2px solid blue; */
 }
 
-/* Horizontal layouts get margin for spacing */
+/* Remove margins for side players since we use gap */
+.position-left .hand-domino,
+.position-right .hand-domino {
+  margin: 0;
+}
+
+/* Horizontal layouts keep margin for spacing */
 .position-top .hand-domino,
 .position-bottom .hand-domino {
   margin: 3px;
@@ -395,6 +384,32 @@ body {
 
 .hand-domino.dummy:hover {
   transform: none;
+}
+
+/* Game Board */
+#board {
+  grid-area: board;
+  position: relative;
+  background: radial-gradient(circle at center, rgba(255,255,255,0.05) 0%, transparent 70%);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+  min-height: 350px;
+  border: 2px solid rgba(255,255,255,0.1);
+  box-shadow: inset 0 4px 8px rgba(0,0,0,0.2);
+}
+
+/* Board Dominoes */
+.board-domino {
+  position: absolute;
+  width: 50px;
+  height: 100px;
+  background: linear-gradient(135deg, #ffffff 0%, #f0f0f0 100%);
+  border: 3px solid #333;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  z-index: 10;
 }
 
 /* Domino halves */
@@ -452,8 +467,13 @@ body.dragging * {
   }
   
   .hand-domino {
-    width: 28px;
-    height: 56px;
+    width: 26px;
+    height: 52px;
+  }
+  
+  #leftPlayer,
+  #rightPlayer {
+    min-height: 400px;
   }
 }
 
@@ -479,8 +499,13 @@ body.dragging * {
   }
   
   .hand-domino {
-    width: 24px;
-    height: 48px;
+    width: 22px;
+    height: 44px;
+  }
+  
+  #leftPlayer,
+  #rightPlayer {
+    min-height: 300px;
   }
 }
 

@@ -1,26 +1,53 @@
 /* =====================================================================
- * src/ui/handRenderer.js — Renders Player Hands
+ * src/ui/handRenderer.js — FIXED Rendering Timing and Layout Issues
  * 
- * AI NOTES:
- * - Shows actual tiles for current player
- * - Shows face-down tiles for opponents
- * - Highlights current turn
- * - FIXED: Bug 5 - Proper pip rendering
+ * FIXES APPLIED:
+ * 1. Better timing for rendering (wait for layout to stabilize)
+ * 2. Force layout calculation before rendering
+ * 3. Clear containers properly before re-rendering
+ * 4. Ensure consistent spacing for side players
  * =================================================================== */
 
 const HandRenderer = {
   /**
-   * Render all player hands
+   * FIX 1: Render all hands with proper timing
    */
   renderAllHands() {
-    // Clear all hands
+    console.log('HandRenderer: Starting render for all hands');
+    
+    // Clear all hands first and force layout
+    this.clearAllHands();
+    
+    // FIX 2: Wait for next frame to ensure layout is stable
+    requestAnimationFrame(() => {
+      this.doRenderAllHands();
+    });
+  },
+  
+  /**
+   * Clear all hands properly
+   */
+  clearAllHands() {
     for (let i = 0; i < 4; i++) {
       const handElement = document.getElementById(`hand${i}`);
       if (handElement) {
+        // Clear content
         handElement.innerHTML = '';
+        
+        // Remove all classes
         handElement.classList.remove('current-player');
+        
+        // Force layout recalculation
+        handElement.offsetHeight;
       }
     }
+  },
+  
+  /**
+   * Actually render all hands
+   */
+  doRenderAllHands() {
+    console.log('HandRenderer: Rendering all hands (after layout stable)');
     
     // Render each player's hand
     for (let seat = 0; seat < 4; seat++) {
@@ -34,6 +61,8 @@ const HandRenderer = {
         currentHand.classList.add('current-player');
       }
     }
+    
+    console.log('HandRenderer: All hands rendered successfully');
   },
   
   /**
@@ -41,38 +70,63 @@ const HandRenderer = {
    */
   renderPlayerHand(seat) {
     const handElement = document.getElementById(`hand${seat}`);
-    if (!handElement) return;
+    if (!handElement) {
+      console.warn(`HandRenderer: Hand element for seat ${seat} not found`);
+      return;
+    }
+    
+    console.log(`HandRenderer: Rendering hand for seat ${seat}`);
     
     if (seat === GameState.mySeat) {
-      // Render actual tiles for current player
       this.renderMyHand(handElement);
     } else {
-      // Render dummy tiles for opponents
       this.renderOpponentHand(handElement, seat);
     }
+    
+    // FIX 3: Force layout after rendering each hand
+    handElement.offsetHeight;
   },
   
   /**
-   * Render current player's hand
+   * Render my hand with interactive tiles
    */
   renderMyHand(handElement) {
+    const tileCount = GameState.myHand.length;
+    console.log(`HandRenderer: Rendering my hand with ${tileCount} tiles`);
+    
+    // Clear first
+    handElement.innerHTML = '';
+    
     GameState.myHand.forEach((domino, index) => {
-      const element = this.createHandDomino(domino, GameState.mySeat, index);
+      const element = this.createHandDomino(domino, true);
       
-      // Add click handler if it's my turn
+      // Add interaction if it's my turn
       if (GameState.isMyTurn()) {
         const isPlayable = GameState.isTilePlayable(domino);
+        
         if (isPlayable) {
           element.classList.add('playable');
-          element.addEventListener('click', () => this.handleTileClick(domino));
+          element.style.cursor = 'grab';
+          element.title = 'Drag to board or click to play';
           
-          // Add drag support
-          element.addEventListener('mousedown', e => {
+          // Click handler
+          element.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.handleTileClick(domino);
+          });
+          
+          // Drag handlers
+          element.addEventListener('mousedown', (e) => {
+            e.preventDefault();
             DragDropManager.startDrag(e, domino, element);
           });
-          element.addEventListener('touchstart', e => {
+          
+          element.addEventListener('touchstart', (e) => {
+            e.preventDefault();
             DragDropManager.startDrag(e, domino, element);
           }, { passive: false });
+          
         } else {
           element.classList.add('disabled');
           element.style.opacity = '0.5';
@@ -85,102 +139,94 @@ const HandRenderer = {
   },
   
   /**
-   * Render opponent's hand (face-down)
+   * FIX 4: Render opponent hand with proper spacing
    */
   renderOpponentHand(handElement, seat) {
     const tileCount = GameState.handSizes[seat] || 0;
+    console.log(`HandRenderer: Rendering ${tileCount} dummy tiles for seat ${seat}`);
+    
+    // Clear first
+    handElement.innerHTML = '';
+    
+    // Create a document fragment for better performance
+    const fragment = document.createDocumentFragment();
     
     for (let i = 0; i < tileCount; i++) {
-      const dummy = document.createElement('div');
-      dummy.className = 'hand-domino dummy';
-      dummy.style.background = '#2d3748';
-      dummy.style.border = '1px solid #1a202c';
-      
-      // Add back pattern
-      const pattern = document.createElement('div');
-      pattern.style.cssText = `
-        width: 100%;
-        height: 100%;
-        background-image: 
-          repeating-linear-gradient(
-            45deg,
-            transparent,
-            transparent 3px,
-            rgba(255,255,255,0.1) 3px,
-            rgba(255,255,255,0.1) 6px
-          ),
-          repeating-linear-gradient(
-            -45deg,
-            transparent,
-            transparent 3px,
-            rgba(255,255,255,0.05) 3px,
-            rgba(255,255,255,0.05) 6px
-          );
-        border-radius: 3px;
-      `;
-      dummy.appendChild(pattern);
-      handElement.appendChild(dummy);
+      const dummy = this.createDummyTile();
+      fragment.appendChild(dummy);
     }
+    
+    // Append all at once
+    handElement.appendChild(fragment);
   },
   
   /**
-   * Create hand domino element with proper pips
+   * Create a hand domino element
    */
-  createHandDomino(domino, seat, index) {
+  createHandDomino(domino, isInteractive = false) {
     const element = document.createElement('div');
     element.className = 'hand-domino';
-    element.dataset.seat = seat;
-    element.dataset.index = index;
     element.dataset.value = JSON.stringify(domino);
     
-    // Top section with pips
-    const topSection = document.createElement('div');
-    topSection.className = 'domino-section top';
-    topSection.appendChild(this.createPipPattern(domino[0]));
+    // Set explicit size to prevent layout shifts
+    element.style.width = '30px';
+    element.style.height = '60px';
+    element.style.flexShrink = '0';
     
-    // Bottom section with pips
-    const bottomSection = document.createElement('div');
-    bottomSection.className = 'domino-section bottom';
-    bottomSection.appendChild(this.createPipPattern(domino[1]));
+    if (isInteractive) {
+      element.style.cursor = 'pointer';
+    }
     
-    element.appendChild(topSection);
-    element.appendChild(bottomSection);
+    // Add domino halves
+    const topHalf = this.createDominoHalf(domino[0]);
+    const bottomHalf = this.createDominoHalf(domino[1]);
+    
+    topHalf.style.borderBottom = '1px solid #333';
+    
+    element.appendChild(topHalf);
+    element.appendChild(bottomHalf);
     
     return element;
   },
   
   /**
-   * FIX FOR BUG 5: Create proper pip pattern
+   * Create a domino half with pips
    */
-  createPipPattern(value) {
-    const container = document.createElement('div');
-    container.className = 'pip-container';
-    container.style.cssText = `
-      position: relative;
-      width: 100%;
-      height: 100%;
+  createDominoHalf(value) {
+    const half = document.createElement('div');
+    half.style.cssText = `
+      flex: 1;
       display: flex;
       align-items: center;
       justify-content: center;
+      position: relative;
+      min-height: 28px;
     `;
     
-    // Pip patterns for each value (0-6)
-    const patterns = {
-      0: [], // Blank
-      1: [[0.5, 0.5]], // Center
-      2: [[0.25, 0.25], [0.75, 0.75]], // Diagonal corners
-      3: [[0.25, 0.25], [0.5, 0.5], [0.75, 0.75]], // Diagonal line
-      4: [[0.25, 0.25], [0.25, 0.75], [0.75, 0.25], [0.75, 0.75]], // Four corners
-      5: [[0.25, 0.25], [0.25, 0.75], [0.5, 0.5], [0.75, 0.25], [0.75, 0.75]], // Four corners + center
-      6: [[0.25, 0.2], [0.25, 0.5], [0.25, 0.8], [0.75, 0.2], [0.75, 0.5], [0.75, 0.8]] // Two columns
+    // Add pips
+    this.addPips(half, value);
+    
+    return half;
+  },
+  
+  /**
+   * Add pips to domino half
+   */
+  addPips(container, value) {
+    const pipPatterns = {
+      0: [],
+      1: [[0.5, 0.5]],
+      2: [[0.3, 0.3], [0.7, 0.7]],
+      3: [[0.3, 0.3], [0.5, 0.5], [0.7, 0.7]],
+      4: [[0.3, 0.3], [0.3, 0.7], [0.7, 0.3], [0.7, 0.7]],
+      5: [[0.3, 0.3], [0.3, 0.7], [0.5, 0.5], [0.7, 0.3], [0.7, 0.7]],
+      6: [[0.25, 0.2], [0.25, 0.5], [0.25, 0.8], [0.75, 0.2], [0.75, 0.5], [0.75, 0.8]]
     };
     
-    const positions = patterns[value] || [];
+    const positions = pipPatterns[value] || [];
     
-    // Create pips
     positions.forEach(([x, y]) => {
       const pip = document.createElement('div');
-      pip.className = 'pip';
       pip.style.cssText = `
         position: absolute;
         width: 4px;
@@ -193,52 +239,99 @@ const HandRenderer = {
       `;
       container.appendChild(pip);
     });
-    
-    // If no pips, show the number for debugging
-    if (positions.length === 0 && value !== 0) {
-      const number = document.createElement('div');
-      number.textContent = value;
-      number.style.fontSize = '10px';
-      number.style.fontWeight = 'bold';
-      container.appendChild(number);
-    }
-    
-    return container;
   },
   
   /**
-   * Handle tile click (alternative to drag)
+   * FIX 5: Create dummy tile with consistent sizing
+   */
+  createDummyTile() {
+    const dummy = document.createElement('div');
+    dummy.className = 'hand-domino dummy';
+    
+    // Set explicit size to prevent layout shifts
+    dummy.style.cssText = `
+      width: 30px;
+      height: 60px;
+      background: linear-gradient(135deg, #4a5568 0%, #2d3748 100%);
+      border: 2px solid #1a202c;
+      border-radius: 6px;
+      display: flex;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      position: relative;
+      flex-shrink: 0;
+    `;
+    
+    // Add pattern
+    const pattern = document.createElement('div');
+    pattern.style.cssText = `
+      position: absolute;
+      inset: 3px;
+      background-image: repeating-linear-gradient(
+        45deg,
+        transparent,
+        transparent 2px,
+        rgba(255,255,255,0.1) 2px,
+        rgba(255,255,255,0.1) 4px
+      );
+      border-radius: 4px;
+    `;
+    
+    dummy.appendChild(pattern);
+    return dummy;
+  },
+  
+  /**
+   * Handle tile click
    */
   handleTileClick(domino) {
-    // Simple click-to-play for mobile
-    const ends = GameState.getBoardEnds();
-    let side = null;
+    console.log('HandRenderer: Tile clicked', domino);
     
-    if (GameState.boardState.length === 0) {
-      side = 'left';
+    if (!GameState.isMyTurn() || !GameState.isTilePlayable(domino)) {
+      return;
+    }
+    
+    // Determine playable sides
+    const playableSides = GameState.getPlayableSides(domino);
+    
+    if (playableSides.length === 0) {
+      UIManager.showError('This tile cannot be played');
+      return;
+    }
+    
+    let side;
+    if (playableSides.length === 1) {
+      side = playableSides[0];
     } else {
-      // Check which side(s) the tile can play on
-      const [a, b] = domino;
-      const canPlayLeft = a === ends.left || b === ends.left;
-      const canPlayRight = a === ends.right || b === ends.right;
-      
-      if (canPlayLeft && canPlayRight) {
-        // Ask player which side
-        side = confirm('Play on the left side? (Cancel for right)') ? 'left' : 'right';
-      } else if (canPlayLeft) {
-        side = 'left';
-      } else if (canPlayRight) {
-        side = 'right';
+      // Ask player which side
+      side = confirm('Play on LEFT side?\n\nOK = Left\nCancel = Right') ? 'left' : 'right';
+    }
+    
+    // Send move
+    window.socket.emit('playTile', {
+      roomId: GameState.roomId,
+      seat: GameState.mySeat,
+      tile: domino,
+      side: side
+    });
+  },
+  
+  /**
+   * FIX 6: Debug function to check layout
+   */
+  debugLayout() {
+    console.log('=== HandRenderer Layout Debug ===');
+    for (let i = 0; i < 4; i++) {
+      const handElement = document.getElementById(`hand${i}`);
+      if (handElement) {
+        const rect = handElement.getBoundingClientRect();
+        const tiles = handElement.querySelectorAll('.hand-domino');
+        console.log(`Seat ${i}:`, {
+          container: { width: rect.width, height: rect.height },
+          tiles: tiles.length,
+          position: handElement.closest('.player-area')?.className
+        });
       }
     }
-    
-    if (side) {
-      window.socket.emit('playTile', {
-        roomId: GameState.roomId,
-        seat: GameState.mySeat,
-        tile: domino,
-        side: side
-      });
-    }
+    console.log('================================');
   }
 };
