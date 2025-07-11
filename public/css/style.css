@@ -1,11 +1,10 @@
 /* =====================================================================
- * Fixed CSS - Proper Vertical Side Player Layouts
+ * Fixed CSS - Proper Vertical Spacing for Side Players
  * 
  * FIXES:
- * - Side players have clean vertical layouts like the example
- * - Better domino styling and interactions
- * - Removed drop zone styling (not needed)
- * - Improved visual consistency
+ * - Side player dominoes are now evenly spaced vertically
+ * - No more stacking - each domino is clearly visible
+ * - Players can easily count their dominoes (7, then 6, etc.)
  * =================================================================== */
 
 :root {
@@ -223,7 +222,7 @@ body {
   border: 1px solid rgba(255,255,255,0.2);
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
   align-items: center;
   font-weight: 500;
 }
@@ -232,6 +231,7 @@ body {
   font-size: 12px;
   margin-bottom: 8px;
   font-weight: 600;
+  flex-shrink: 0;
 }
 
 #topPlayer {
@@ -252,7 +252,7 @@ body {
   border: 2px solid rgba(76, 175, 80, 0.5);
 }
 
-/* FIXED: Player Hand Containers with Proper Vertical Layouts */
+/* FIXED: Player Hand Containers with Proper Spacing */
 .player-hand-container {
   padding: 8px;
   border-radius: 6px;
@@ -262,6 +262,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  flex: 1;
+  width: 100%;
 }
 
 .player-hand-container.current-player {
@@ -280,6 +282,7 @@ body {
   flex-direction: row;
   flex-wrap: wrap;
   justify-content: center;
+  gap: 4px;
   min-height: 80px;
 }
 
@@ -288,25 +291,29 @@ body {
   flex-direction: row;
   flex-wrap: wrap;
   justify-content: center;
+  gap: 4px;
   min-height: 80px;
 }
 
-/* FIXED: Side players - clean vertical layouts like the example */
+/* FIXED: Side players - proper vertical spacing */
 .position-left .player-hand-container,
 .position-right .player-hand-container {
   flex-direction: column;
   justify-content: flex-start;
   align-items: center;
   height: 100%;
-  min-height: 350px;
-  padding: 12px 6px;
+  width: 100%;
+  padding: 10px 8px;
+  gap: 6px; /* KEY FIX: Proper spacing between dominoes */
   overflow-y: auto;
 }
 
+/* FIXED: Side player dominoes with consistent spacing */
 .position-left .hand-domino,
 .position-right .hand-domino {
-  margin: 2px 0;
-  flex-shrink: 0;
+  margin: 0; /* Remove margin since we use gap now */
+  flex-shrink: 0; /* Prevent shrinking */
+  position: relative; /* Ensure proper positioning */
 }
 
 /* Game Board */
@@ -335,20 +342,26 @@ body {
   z-index: 10;
 }
 
-/* Hand Dominoes */
+/* FIXED: Hand Dominoes with consistent sizing */
 .hand-domino {
-  width: 35px;
-  height: 70px;
+  width: 32px;
+  height: 64px;
   background: linear-gradient(135deg, #ffffff 0%, #f0f0f0 100%);
   border: 2px solid #333;
   border-radius: 6px;
-  margin: 3px;
-  display: inline-flex;
+  display: flex;
   flex-direction: column;
   cursor: pointer;
   transition: all 0.2s ease;
   box-shadow: 0 2px 6px rgba(0,0,0,0.2);
   position: relative;
+  flex-shrink: 0;
+}
+
+/* Horizontal layouts get margin for spacing */
+.position-top .hand-domino,
+.position-bottom .hand-domino {
+  margin: 3px;
 }
 
 .hand-domino:hover {
@@ -391,7 +404,7 @@ body {
   align-items: center;
   justify-content: center;
   position: relative;
-  min-height: 30px;
+  min-height: 28px;
 }
 
 .domino-section.top {
@@ -439,8 +452,8 @@ body.dragging * {
   }
   
   .hand-domino {
-    width: 30px;
-    height: 60px;
+    width: 28px;
+    height: 56px;
   }
 }
 
@@ -461,8 +474,13 @@ body.dragging * {
     grid-template-areas:
       "top-player"
       "board"
-      "left-player right-player"
+      "left-player right-player" 
       "player-hand";
+  }
+  
+  .hand-domino {
+    width: 24px;
+    height: 48px;
   }
 }
 
