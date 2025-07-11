@@ -1,12 +1,11 @@
 /* =====================================================================
- * server.js — Dominican Domino Server
+ * server.js — Dominican Domino Server (COMPLETELY FIXED)
  * 
- * AI DEVELOPMENT NOTES:
- * - This server handles 4-player domino games with team scoring
- * - Players sit in seats 0-3, with 0&2 vs 1&3 as teams
- * - First to 200 points wins
- * - Uses Socket.IO for real-time communication
- * - All game state is stored in memory (add database for persistence)
+ * FIXES APPLIED:
+ * - Game only starts when exactly 4 players are connected and ready
+ * - Better player state tracking
+ * - Improved move validation
+ * - Fixed board ends calculation
  * =================================================================== */
 
 const express = require('express');
@@ -23,7 +22,7 @@ const io = socketIo(server);
 const PORT = process.env.PORT || 3000;
 
 // ────────────────────────────────────────────────────────────────────────
-// Static Files - IMPORTANT: This serves your game files
+// Static Files
 // ────────────────────────────────────────────────────────────────────────
 app.use(express.static('public'));
 app.use('/shared', express.static(path.join(__dirname, 'shared')));
@@ -37,34 +36,37 @@ const OPENING_TILE = [6, 6];
 
 // ────────────────────────────────────────────────────────────────────────
 // Game State Storage
-// AI NOTE: In production, use Redis or a database instead
 // ────────────────────────────────────────────────────────────────────────
-const gameRooms = new Map(); // roomId -> GameRoom object
+const gameRooms = new Map();
 
 // ────────────────────────────────────────────────────────────────────────
-// Game Room Class - Manages a single game
+// Game Room Class - FIXED: Better player tracking
 // ────────────────────────────────────────────────────────────────────────
 class GameRoom {
   constructor(roomId) {
     this.roomId = roomId;
-    this.players = [null, null, null, null]; // 4 seats
+    this.players = [null, null, null, null];
     this.gameState = null;
-    this.scores = [0, 0]; // Team scores
+    this.scores = [0, 0];
     this.isGameActive = false;
+    this.roundInProgress = false;
   }
 
-  // Add a player to the room
   addPlayer(player, seat) {
     this.players[seat] = player;
     return true;
   }
 
-  // Check if room is full
+  // FIXED: More strict full room check
   isFull() {
-    return this.players.every(p => p !== null);
+    return this.players.every(p => p !== null && p.connected);
   }
 
-  // Get connected players
+  // FIXED: Better connected player count
+  getConnectedCount() {
+    return this.players.filter(p => p !== null && p.connected).length;
+  }
+
   getPlayerList() {
     return this.players
       .map((player, seat) => player ? {
@@ -74,48 +76,60 @@ class GameRoom {
       } : null)
       .filter(p => p !== null);
   }
+
+  // FIXED: Find empty seat more reliably
+  findEmptySeat() {
+    for (let seat = 0; seat < 4; seat++) {
+      if (this.players[seat] === null) {
+        return seat;
+      }
+    }
+    return -1;
+  }
 }
 
 // ────────────────────────────────────────────────────────────────────────
-// Domino Game State - Handles game logic
+// Domino Game State - FIXED: Better validation and board tracking
 // ────────────────────────────────────────────────────────────────────────
 class DominoGameState {
   constructor() {
     this.tiles = [];
     this.playerHands = [[], [], [], []];
     this.board = [];
+    this.leftEnd = null;
+    this.rightEnd = null;
     this.currentTurn = null;
     this.consecutivePasses = 0;
+    this.isFirstMove = true;
   }
 
-  // Initialize and shuffle tiles
   initTiles() {
     this.tiles = [];
-    // Create all 28 dominoes
     for (let i = 0; i <= 6; i++) {
       for (let j = i; j <= 6; j++) {
         this.tiles.push([i, j]);
       }
     }
-    // Shuffle
+    // Fisher-Yates shuffle
     for (let i = this.tiles.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [this.tiles[i], this.tiles[j]] = [this.tiles[j], this.tiles[i]];
     }
   }
 
-  // Deal tiles to players
   dealTiles() {
     this.initTiles();
-    // Deal 7 tiles to each player
+    this.playerHands = [[], [], [], []];
+    
     for (let seat = 0; seat < 4; seat++) {
       for (let i = 0; i < HAND_SIZE; i++) {
-        this.playerHands[seat].push(this.tiles.pop());
+        if (this.tiles.length > 0) {
+          this.playerHands[seat].push(this.tiles.pop());
+        }
       }
     }
   }
 
-  // Find who has double-six
   findStartingPlayer() {
     for (let seat = 0; seat < 4; seat++) {
       const hasDoubleSix = this.playerHands[seat].some(
@@ -126,39 +140,52 @@ class DominoGameState {
         return seat;
       }
     }
-    // Fallback - shouldn't happen with full deck
     this.currentTurn = 0;
     return 0;
   }
 
-  // Get board ends for matching
+  // FIXED: Proper board ends tracking
   getBoardEnds() {
-    if (this.board.length === 0) return null;
+    if (this.board.length === 0) {
+      return { left: null, right: null };
+    }
     return {
-      left: this.board[0][0],
-      right: this.board[this.board.length - 1][1]
+      left: this.leftEnd,
+      right: this.rightEnd
     };
   }
 
-  // Check if a move is valid
-  isValidMove(tile, side) {
+  // FIXED: Better move validation
+  isValidMove(seat, tile, side) {
+    // Validate player has the tile
+    const hasThisTile = this.playerHands[seat].some(
+      t => t[0] === tile[0] && t[1] === tile[1]
+    );
+    if (!hasThisTile) return false;
+
     // First move must be double-six
-    if (this.board.length === 0) {
+    if (this.isFirstMove) {
       return tile[0] === 6 && tile[1] === 6;
     }
 
-    const ends = this.getBoardEnds();
     const [a, b] = tile;
+    const ends = this.getBoardEnds();
 
     if (side === 'left') {
       return a === ends.left || b === ends.left;
-    } else {
+    } else if (side === 'right') {
       return a === ends.right || b === ends.right;
     }
+
+    return false;
   }
 
-  // Play a tile
+  // FIXED: Proper tile placement with end tracking
   playTile(seat, tile, side) {
+    if (!this.isValidMove(seat, tile, side)) {
+      return false;
+    }
+
     // Remove from hand
     const handIndex = this.playerHands[seat].findIndex(
       t => t[0] === tile[0] && t[1] === tile[1]
@@ -168,24 +195,31 @@ class DominoGameState {
     this.playerHands[seat].splice(handIndex, 1);
 
     // Add to board
-    if (this.board.length === 0) {
-      this.board.push(tile);
+    if (this.isFirstMove) {
+      // First move - place double-six
+      this.board = [tile];
+      this.leftEnd = tile[0];
+      this.rightEnd = tile[1];
+      this.isFirstMove = false;
     } else {
-      const ends = this.getBoardEnds();
-      let orientedTile = [...tile];
-
+      const [a, b] = tile;
+      
       if (side === 'left') {
-        // Make sure tile connects properly
-        if (orientedTile[1] !== ends.left) {
-          orientedTile.reverse();
+        if (a === this.leftEnd) {
+          this.board.unshift([b, a]);
+          this.leftEnd = b;
+        } else {
+          this.board.unshift([a, b]);
+          this.leftEnd = a;
         }
-        this.board.unshift(orientedTile);
       } else {
-        // Make sure tile connects properly
-        if (orientedTile[0] !== ends.right) {
-          orientedTile.reverse();
+        if (a === this.rightEnd) {
+          this.board.push([a, b]);
+          this.rightEnd = b;
+        } else {
+          this.board.push([b, a]);
+          this.rightEnd = a;
         }
-        this.board.push(orientedTile);
       }
     }
 
@@ -194,12 +228,16 @@ class DominoGameState {
     return true;
   }
 
-  // Move to next player
   advanceTurn() {
     this.currentTurn = (this.currentTurn + 1) % 4;
   }
 
-  // Check if round is over
+  // Handle player pass
+  playerPass() {
+    this.consecutivePasses++;
+    this.advanceTurn();
+  }
+
   checkRoundEnd() {
     // Check for domino (empty hand)
     for (let seat = 0; seat < 4; seat++) {
@@ -208,9 +246,8 @@ class DominoGameState {
       }
     }
 
-    // Check for blocked game (all passed)
+    // Check for blocked game
     if (this.consecutivePasses >= 4) {
-      // Find winner by lowest pip count
       let lowestSum = Infinity;
       let winner = -1;
       
@@ -230,7 +267,6 @@ class DominoGameState {
     return { ended: false };
   }
 
-  // Calculate points for the round
   calculatePoints() {
     let points = 0;
     for (let seat = 0; seat < 4; seat++) {
@@ -248,22 +284,17 @@ class DominoGameState {
 io.on('connection', (socket) => {
   console.log('New connection:', socket.id);
 
-  // ──────────────────────────────────────────────────────────────────────
-  // Find or Create Room
-  // ──────────────────────────────────────────────────────────────────────
   socket.on('findRoom', ({ playerName, roomId, reconnectSeat }) => {
-    // Try to reconnect to existing room
+    // Try to reconnect
     if (roomId && reconnectSeat !== null) {
       const room = gameRooms.get(roomId);
-      if (room && room.players[reconnectSeat]) {
-        // Reconnect player
+      if (room && room.players[reconnectSeat] && room.players[reconnectSeat].name === playerName) {
         room.players[reconnectSeat].socket = socket;
         room.players[reconnectSeat].connected = true;
         
         socket.join(roomId);
         socket.emit('roomJoined', { roomId, seat: parseInt(reconnectSeat) });
         
-        // Send current game state if active
         if (room.isGameActive && room.gameState) {
           socket.emit('roundStart', {
             yourHand: room.gameState.playerHands[reconnectSeat],
@@ -271,40 +302,45 @@ io.on('connection', (socket) => {
             scores: room.scores
           });
           
-          // Send board state
           socket.emit('broadcastMove', {
             seat: -1,
             tile: null,
-            board: room.gameState.board
+            board: room.gameState.board,
+            leftEnd: room.gameState.leftEnd,
+            rightEnd: room.gameState.rightEnd
           });
         }
         
         io.to(roomId).emit('lobbyUpdate', { players: room.getPlayerList() });
+        
+        // FIXED: Check if we can start game after reconnection
+        if (!room.isGameActive && room.isFull()) {
+          console.log('Starting game after reconnection');
+          startGame(room);
+        }
+        
         return;
       }
     }
 
-    // Find room with space or create new one
+    // Find room with space
     let targetRoom = null;
     let assignedSeat = null;
 
-    // Look for existing room with space
     for (const [id, room] of gameRooms) {
-      if (!room.isGameActive) {
-        for (let seat = 0; seat < 4; seat++) {
-          if (room.players[seat] === null) {
-            targetRoom = room;
-            assignedSeat = seat;
-            break;
-          }
+      if (!room.isGameActive && room.getConnectedCount() < 4) {
+        const emptySeat = room.findEmptySeat();
+        if (emptySeat !== -1) {
+          targetRoom = room;
+          assignedSeat = emptySeat;
+          break;
         }
-        if (targetRoom) break;
       }
     }
 
     // Create new room if needed
     if (!targetRoom) {
-      const newRoomId = 'room_' + Date.now();
+      const newRoomId = 'room_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
       targetRoom = new GameRoom(newRoomId);
       gameRooms.set(newRoomId, targetRoom);
       assignedSeat = 0;
@@ -321,72 +357,89 @@ io.on('connection', (socket) => {
     targetRoom.addPlayer(player, assignedSeat);
     socket.join(targetRoom.roomId);
 
-    // Send room info
     socket.emit('roomJoined', { 
       roomId: targetRoom.roomId, 
       seat: assignedSeat 
     });
 
-    // Update all players in room
     io.to(targetRoom.roomId).emit('lobbyUpdate', { 
       players: targetRoom.getPlayerList() 
     });
 
-    // Start game if room is full
+    console.log(`Player ${playerName} joined room ${targetRoom.roomId} as seat ${assignedSeat}`);
+    console.log(`Room now has ${targetRoom.getConnectedCount()}/4 players`);
+
+    // FIXED: Only start when exactly 4 players are connected
     if (targetRoom.isFull() && !targetRoom.isGameActive) {
-      startGame(targetRoom);
+      console.log('Room is full, starting game...');
+      setTimeout(() => startGame(targetRoom), 1000); // Small delay for UI
     }
   });
 
-  // ──────────────────────────────────────────────────────────────────────
-  // Play Tile
-  // ──────────────────────────────────────────────────────────────────────
   socket.on('playTile', ({ roomId, seat, tile, side }) => {
     const room = gameRooms.get(roomId);
-    if (!room || !room.isGameActive) return;
+    if (!room || !room.isGameActive || !room.gameState) {
+      socket.emit('errorMessage', 'Game not active');
+      return;
+    }
 
-    // Validate turn
     if (room.gameState.currentTurn !== seat) {
       socket.emit('errorMessage', 'Not your turn!');
       return;
     }
 
-    // Validate move
-    if (!room.gameState.isValidMove(tile, side)) {
+    if (!room.gameState.isValidMove(seat, tile, side)) {
       socket.emit('errorMessage', 'Invalid move!');
       return;
     }
 
-    // Make move
     if (room.gameState.playTile(seat, tile, side)) {
-      // Broadcast to all players
+      // Broadcast move
       io.to(roomId).emit('broadcastMove', {
         seat: seat,
         tile: tile,
-        board: room.gameState.board
+        board: room.gameState.board,
+        leftEnd: room.gameState.leftEnd,
+        rightEnd: room.gameState.rightEnd
       });
 
       // Update player's hand
-      socket.emit('updateHand', room.gameState.playerHands[seat]);
+      room.players[seat].socket.emit('updateHand', room.gameState.playerHands[seat]);
 
       // Check for round end
       const result = room.gameState.checkRoundEnd();
       if (result.ended) {
         endRound(room, result);
       } else {
-        // Continue game
         io.to(roomId).emit('turnChanged', room.gameState.currentTurn);
       }
     }
   });
 
-  // ──────────────────────────────────────────────────────────────────────
-  // Handle Disconnect
-  // ──────────────────────────────────────────────────────────────────────
+  socket.on('passPlay', ({ roomId, seat }) => {
+    const room = gameRooms.get(roomId);
+    if (!room || !room.isGameActive || !room.gameState) return;
+
+    if (room.gameState.currentTurn !== seat) {
+      socket.emit('errorMessage', 'Not your turn!');
+      return;
+    }
+
+    room.gameState.playerPass();
+    
+    io.to(roomId).emit('playerPassed', { seat });
+    
+    const result = room.gameState.checkRoundEnd();
+    if (result.ended) {
+      endRound(room, result);
+    } else {
+      io.to(roomId).emit('turnChanged', room.gameState.currentTurn);
+    }
+  });
+
   socket.on('disconnect', () => {
     console.log('Disconnected:', socket.id);
     
-    // Find and mark player as disconnected
     for (const [roomId, room] of gameRooms) {
       for (let seat = 0; seat < 4; seat++) {
         if (room.players[seat] && room.players[seat].socket === socket) {
@@ -394,6 +447,11 @@ io.on('connection', (socket) => {
           io.to(roomId).emit('lobbyUpdate', { 
             players: room.getPlayerList() 
           });
+          
+          // If game was waiting for players, clean up empty rooms
+          if (!room.isGameActive && room.getConnectedCount() === 0) {
+            gameRooms.delete(roomId);
+          }
           return;
         }
       }
@@ -402,17 +460,24 @@ io.on('connection', (socket) => {
 });
 
 // ────────────────────────────────────────────────────────────────────────
-// Game Functions
+// Game Functions - FIXED
 // ────────────────────────────────────────────────────────────────────────
 function startGame(room) {
+  if (!room.isFull()) {
+    console.log('Cannot start game - not enough players');
+    return;
+  }
+
+  console.log(`Starting game in room ${room.roomId}`);
+  
   room.isGameActive = true;
+  room.roundInProgress = true;
   room.gameState = new DominoGameState();
   
-  // Deal tiles
   room.gameState.dealTiles();
-  
-  // Find starting player
   const startingSeat = room.gameState.findStartingPlayer();
+  
+  console.log(`Starting player: seat ${startingSeat}`);
   
   // Send game start to all players
   for (let seat = 0; seat < 4; seat++) {
@@ -425,16 +490,18 @@ function startGame(room) {
       });
     }
   }
+
+  // Send turn change
+  io.to(room.roomId).emit('turnChanged', startingSeat);
 }
 
 function endRound(room, result) {
   const points = room.gameState.calculatePoints();
   const winningTeam = result.winner % 2;
   
-  // Update scores
   room.scores[winningTeam] += points;
+  room.roundInProgress = false;
   
-  // Notify players
   io.to(room.roomId).emit('roundEnded', {
     winner: result.winner,
     reason: result.reason,
@@ -443,7 +510,6 @@ function endRound(room, result) {
     board: room.gameState.board
   });
   
-  // Check for game over
   if (room.scores[0] >= WINNING_SCORE || room.scores[1] >= WINNING_SCORE) {
     const winningTeam = room.scores[0] >= WINNING_SCORE ? 0 : 1;
     io.to(room.roomId).emit('gameOver', {
@@ -451,14 +517,14 @@ function endRound(room, result) {
       scores: room.scores
     });
     
-    // Clean up room after delay
     setTimeout(() => {
       gameRooms.delete(room.roomId);
     }, 30000);
   } else {
-    // Start new round after delay
     setTimeout(() => {
-      startGame(room);
+      if (room.isFull()) {
+        startGame(room);
+      }
     }, 5000);
   }
 }

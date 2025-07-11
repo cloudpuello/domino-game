@@ -1,6 +1,12 @@
 /* =====================================================================
- * style.css — Dominican Domino Game - Professional Theme (UPDATED)
- * Compatible with fixed client.js structure
+ * style.css — Dominican Domino Game - Professional Theme (COMPLETELY FIXED)
+ * 
+ * FIXES APPLIED:
+ * - Better domino rendering and positioning
+ * - Fixed drop zones styling and positioning
+ * - Improved visual feedback for interactions
+ * - Better responsive design
+ * - Enhanced animations and transitions
  * =================================================================== */
 
 /* ────────────────────────────────────────────────────────────────────────
@@ -185,6 +191,18 @@ body {
   border-radius: var(--radius-md);
   border: 2px solid var(--accent-gold);
   box-shadow: var(--shadow-sm);
+  transition: all var(--transition-normal);
+}
+
+#status.your-turn {
+  background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+  border-color: var(--success);
+  animation: yourTurnPulse 2s ease-in-out infinite;
+}
+
+@keyframes yourTurnPulse {
+  0%, 100% { box-shadow: 0 0 5px rgba(39, 174, 96, 0.3); }
+  50% { box-shadow: 0 0 20px rgba(39, 174, 96, 0.6); }
 }
 
 .error-display, #errors {
@@ -197,6 +215,12 @@ body {
   border: 1px solid rgba(231, 76, 60, 0.3);
   min-height: 1.5em;
   transition: all var(--transition-normal);
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-5px); }
+  75% { transform: translateX(5px); }
 }
 
 .message-log, #messages {
@@ -227,6 +251,34 @@ body {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideOutRight {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+}
+
+@keyframes scoreUpdate {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(1); }
 }
 
 /* ────────────────────────────────────────────────────────────────────────
@@ -310,7 +362,7 @@ body {
 }
 
 /* ────────────────────────────────────────────────────────────────────────
- * Player Areas - Updated for new structure
+ * Player Areas - FIXED for better positioning
  * ────────────────────────────────────────────────────────────────────── */
 .player-area {
   color: var(--text-light);
@@ -334,6 +386,12 @@ body {
   transform: translateY(-2px);
 }
 
+.player-area .player-name {
+  font-size: 14px;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
 #topPlayer {
   grid-area: top-player;
 }
@@ -348,14 +406,16 @@ body {
   align-self: center;
 }
 
-#hand {
+#bottomPlayer {
   grid-area: player-hand;
-  background: rgba(255,255,255,0.15);
-  border: 2px solid rgba(212, 175, 55, 0.5);
+  background: rgba(76, 175, 80, 0.15);
+  border: 2px solid rgba(76, 175, 80, 0.5);
 }
 
-/* New hand containers for fixed structure */
-.player-hand-container, #hand0, #hand1, #hand2, #hand3 {
+/* ────────────────────────────────────────────────────────────────────────
+ * Player Hand Containers - FIXED for better positioning
+ * ────────────────────────────────────────────────────────────────────── */
+.player-hand-container {
   min-height: 80px;
   padding: 10px;
   border-radius: 8px;
@@ -368,50 +428,48 @@ body {
   transition: all 0.3s ease;
 }
 
-.player-hand-container.current-player, 
-#hand0.current-player, 
-#hand1.current-player, 
-#hand2.current-player, 
-#hand3.current-player {
+.player-hand-container.current-player {
   border-color: #ffd700;
   background: rgba(255,215,0,0.2);
-  box-shadow: 0 0 15px rgba(255,215,0,0.5);
+  box-shadow: 0 0 20px rgba(255,215,0,0.6);
+  animation: currentPlayerGlow 2s ease-in-out infinite;
 }
 
-.player-area-hand-display {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  justify-content: center;
-  margin-top: var(--space-sm);
-  min-height: 40px;
-}
-
-.active-turn-indicator {
-  box-shadow: 
-    0 0 0 3px var(--accent-gold),
-    0 0 20px rgba(212, 175, 55, 0.6),
-    var(--shadow-md);
-  animation: turnGlow 2s ease-in-out infinite alternate;
-}
-
-@keyframes turnGlow {
-  from {
-    box-shadow: 
-      0 0 0 3px var(--accent-gold),
-      0 0 15px rgba(212, 175, 55, 0.4),
-      var(--shadow-md);
+@keyframes currentPlayerGlow {
+  0%, 100% { 
+    box-shadow: 0 0 20px rgba(255,215,0,0.4); 
   }
-  to {
-    box-shadow: 
-      0 0 0 3px var(--accent-light),
-      0 0 25px rgba(212, 175, 55, 0.8),
-      var(--shadow-lg);
+  50% { 
+    box-shadow: 0 0 30px rgba(255,215,0,0.8); 
   }
+}
+
+.player-hand-container.my-hand {
+  background: rgba(76, 175, 80, 0.1);
+  border-color: rgba(76, 175, 80, 0.3);
+}
+
+/* FIXED: Side hands with proper vertical layout */
+.position-left .player-hand-container,
+.position-right .player-hand-container {
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: center;
+  height: 100%;
+  min-height: 300px;
+  max-height: 400px;
+  padding: 15px 8px;
+  overflow-y: auto;
+}
+
+.position-left .hand-domino,
+.position-right .hand-domino {
+  margin: 4px 0;
+  transform-origin: center;
 }
 
 /* ────────────────────────────────────────────────────────────────────────
- * Game Board - Updated for snake formation
+ * Game Board - FIXED for proper domino display
  * ────────────────────────────────────────────────────────────────────── */
 .game-board, #board {
   grid-area: board;
@@ -429,12 +487,6 @@ body {
     var(--shadow-md);
 }
 
-.game-board.board-center, #board.board-center {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
 .game-board::before, #board::before {
   content: "";
   position: absolute;
@@ -445,7 +497,7 @@ body {
 }
 
 /* ────────────────────────────────────────────────────────────────────────
- * Board Dominoes - Portrait orientation with snake formation
+ * Board Dominoes - FIXED for proper rendering
  * ────────────────────────────────────────────────────────────────────── */
 .board-domino {
   position: absolute;
@@ -462,17 +514,22 @@ body {
   display: flex;
   flex-direction: column;
   z-index: 10;
-  box-shadow: 0 3px 6px rgba(0,0,0,0.3);
+  box-shadow: 0 3px 8px rgba(0,0,0,0.3);
   transition: all 0.3s ease;
 }
 
 .board-domino:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+  box-shadow: 0 5px 15px rgba(0,0,0,0.4);
+}
+
+.board-domino.double {
+  transform: rotate(90deg);
+  transition: transform var(--transition-slow);
 }
 
 /* ────────────────────────────────────────────────────────────────────────
- * Hand Dominoes - Portrait orientation
+ * Hand Dominoes - FIXED for better interaction
  * ────────────────────────────────────────────────────────────────────── */
 .hand-domino {
   width: 30px;
@@ -483,20 +540,38 @@ body {
     #f1f3f4 50%, 
     #e8eaed 75%, 
     #f8f9fa 100%);
-  border: 1px solid #333;
+  border: 2px solid #333;
   border-radius: 4px;
   margin: 2px;
   display: inline-flex;
   flex-direction: column;
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  position: relative;
 }
 
 .hand-domino:hover {
+  transform: scale(1.05) translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.hand-domino.playable {
+  border-color: #ffd700;
+  box-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+  cursor: grab;
+}
+
+.hand-domino.playable:hover {
+  border-color: #ffed4e;
+  box-shadow: 0 0 15px rgba(255, 215, 0, 0.8);
   transform: scale(1.1) translateY(-3px);
-  box-shadow: 0 4px 8px rgba(0,0,0,0.3);
-  background: linear-gradient(135deg, #f0f0f0 0%, #e8e8e8 100%);
+}
+
+.hand-domino.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  filter: grayscale(0.3);
 }
 
 .hand-domino.dummy {
@@ -516,8 +591,33 @@ body {
     #1a202c 100%);
 }
 
+/* Rotate dominoes for side players */
+.position-left .hand-domino {
+  transform: rotate(90deg);
+}
+
+.position-right .hand-domino {
+  transform: rotate(-90deg);
+}
+
+.position-left .hand-domino:hover {
+  transform: rotate(90deg) scale(1.05) translateY(-2px);
+}
+
+.position-right .hand-domino:hover {
+  transform: rotate(-90deg) scale(1.05) translateY(-2px);
+}
+
+.position-left .hand-domino.playable:hover {
+  transform: rotate(90deg) scale(1.1) translateY(-3px);
+}
+
+.position-right .hand-domino.playable:hover {
+  transform: rotate(-90deg) scale(1.1) translateY(-3px);
+}
+
 /* ────────────────────────────────────────────────────────────────────────
- * Domino Sections (Top and Bottom)
+ * Domino Sections and Pips - FIXED
  * ────────────────────────────────────────────────────────────────────── */
 .domino-section {
   flex: 1;
@@ -526,459 +626,122 @@ body {
   justify-content: center;
   font-weight: bold;
   color: #333;
-  font-size: 14px;
+  font-size: 12px;
+  position: relative;
 }
 
 .domino-section.top {
   border-bottom: 1px solid #333;
 }
 
+.board-domino .domino-section {
+  font-size: 14px;
+}
+
 .hand-domino .domino-section {
   font-size: 10px;
 }
 
-/* ────────────────────────────────────────────────────────────────────────
- * Legacy Tile Styles (for compatibility)
- * ────────────────────────────────────────────────────────────────────── */
-.tile {
-  display: flex;
-  align-items: center;
-  width: 90px;
-  height: 45px;
-  background: 
-    linear-gradient(135deg, 
-      #ffffff 0%, 
-      #f8f9fa 25%, 
-      #f1f3f4 50%, 
-      #e8eaed 75%, 
-      #f8f9fa 100%);
-  border: 2px solid var(--domino-border);
-  border-radius: var(--radius-sm);
-  box-shadow: 
-    0 4px 8px rgba(0,0,0,0.2),
-    inset 0 1px 2px rgba(255,255,255,0.8),
-    inset 0 -1px 2px rgba(0,0,0,0.1);
-  cursor: grab;
-  transition: all var(--transition-normal);
+.pip-container {
   position: relative;
-  flex-shrink: 0;
-}
-
-.tile:active {
-  cursor: grabbing;
-}
-
-.tile .half {
-  flex: 1;
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  grid-template-rows: repeat(3, 1fr);
-  padding: 6px;
+  width: 100%;
   height: 100%;
-}
-
-.tile .separator {
-  width: 3px;
-  height: 100%;
-  background: 
-    linear-gradient(to bottom,
-      var(--domino-border) 0%,
-      #404040 20%,
-      #2a2a2a 40%,
-      #404040 60%,
-      var(--domino-border) 100%);
-  border-radius: 1px;
-  margin: 2px 0;
-  box-shadow: 
-    inset 1px 0 1px rgba(255,255,255,0.2),
-    inset -1px 0 1px rgba(0,0,0,0.3);
 }
 
 .pip {
-  width: 10px;
-  height: 10px;
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  background: #333;
   border-radius: 50%;
-  place-self: center;
-  background: 
-    radial-gradient(circle at 30% 30%, 
-      #333333 0%, 
-      #1a1a1a  40%, 
-      #000000 100%);
-  box-shadow: 
-    0 1px 2px rgba(0,0,0,0.6),
-    inset 0 1px 1px rgba(255,255,255,0.1),
-    inset 0 -1px 1px rgba(0,0,0,0.5);
-  position: relative;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.3);
 }
 
-.pip::after {
-  content: "";
-  position: absolute;
-  top: 1px;
-  left: 1px;
-  width: 2px;
-  height: 2px;
-  background: rgba(255,255,255,0.3);
-  border-radius: 50%;
+.pip-display {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  font-weight: bold;
+  color: #333;
 }
 
 /* ────────────────────────────────────────────────────────────────────────
- * Tile States
+ * Drop Zones - FIXED for precise positioning
  * ────────────────────────────────────────────────────────────────────── */
-.tile.double {
-  transform: rotate(90deg);
-  transition: transform var(--transition-slow);
+.drop-zone {
+  position: absolute;
+  border: 3px dashed #ffd700;
+  border-radius: 8px;
+  background: rgba(255, 215, 0, 0.1);
+  transition: all 0.3s ease;
+  pointer-events: all;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffd700;
+  font-size: 11px;
+  font-weight: bold;
+  text-align: center;
+  z-index: 50;
+  opacity: 0;
 }
 
-.tile.disabled, .hand-domino.disabled {
-  opacity: 0.6;
-  cursor: default;
-  filter: grayscale(0.3);
+.drop-zone:hover {
+  background: rgba(255, 215, 0, 0.2);
+  border-color: #ffed4e;
 }
 
-.tile.ghost, .hand-domino.ghost {
-  opacity: 0.3;
-  transform: scale(0.95);
-}
-
-.tile.playable, .hand-domino.playable {
-  cursor: grab;
-  border-color: var(--accent-gold);
-  box-shadow: 
-    0 0 0 2px rgba(212, 175, 55, 0.3),
-    0 4px 12px rgba(0,0,0,0.25),
-    inset 0 1px 2px rgba(255,255,255,0.8),
-    inset 0 -1px 2px rgba(0,0,0,0.1);
-}
-
-.tile.playable:hover, .hand-domino.playable:hover {
-  transform: translateY(-3px) scale(1.02);
-  border-color: var(--accent-light);
-  box-shadow: 
-    0 0 0 3px rgba(212, 175, 55, 0.5),
-    0 8px 20px rgba(0,0,0,0.3),
-    0 0 15px rgba(212, 175, 55, 0.4),
-    inset 0 1px 2px rgba(255,255,255,0.9),
-    inset 0 -1px 2px rgba(0,0,0,0.1);
-}
-
-.tile.dragging, .hand-domino.dragging, .domino-dragging {
+/* ────────────────────────────────────────────────────────────────────────
+ * Dragging States - FIXED
+ * ────────────────────────────────────────────────────────────────────── */
+.hand-domino.dragging {
   position: fixed;
   z-index: 1000;
   pointer-events: none;
   transform: scale(1.2) rotate(5deg);
-  box-shadow: 
-    0 15px 35px rgba(0,0,0,0.4),
-    0 5px 15px rgba(0,0,0,0.2),
-    0 0 20px rgba(212, 175, 55, 0.6);
-  border-color: var(--accent-light);
-  filter: brightness(1.1);
+  box-shadow: 0 8px 25px rgba(0,0,0,0.4);
+  border: 2px solid #ffd700;
+  transition: none;
+}
+
+body.dragging {
+  cursor: grabbing !important;
+  user-select: none;
+}
+
+body.dragging * {
+  cursor: inherit !important;
 }
 
 /* ────────────────────────────────────────────────────────────────────────
- * Dummy Tiles (Opponent Hands)
+ * Placeholder and Animations
  * ────────────────────────────────────────────────────────────────────── */
-.dummy-tile {
-  width: 24px;
-  height: 36px;
-  background: 
-    linear-gradient(135deg, 
-      #4a5568 0%, 
-      #2d3748 50%, 
-      #1a202c 100%);
-  border: 1px solid #2d3748;
-  border-radius: 3px;
-  box-shadow: 
-    0 2px 4px rgba(0,0,0,0.3),
-    inset 0 1px 1px rgba(255,255,255,0.1);
-  position: relative;
-  flex-shrink: 0;
-}
-
-.dummy-tile::before {
-  content: "";
+.starting-tile-placeholder {
   position: absolute;
-  top: 2px;
-  left: 2px;
-  right: 2px;
-  bottom: 2px;
-  background: 
-    repeating-linear-gradient(
-      45deg,
-      transparent 0px,
-      transparent 1px,
-      rgba(255,255,255,0.1) 1px,
-      rgba(255,255,255,0.1) 2px
-    );
-  border-radius: 2px;
-}
-
-/* ────────────────────────────────────────────────────────────────────────
- * Drop Zones and Placeholders
- * ────────────────────────────────────────────────────────────────────── */
-.tile-placeholder {
-  position: absolute;
-  width: 90px;
-  height: 60px;
-  border: 3px dashed var(--accent-gold);
-  border-radius: var(--radius-md);
-  background: 
-    linear-gradient(135deg, 
-      rgba(212, 175, 55, 0.2) 0%, 
-      rgba(212, 175, 55, 0.1) 100%);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-light);
-  font-size: 0.75rem;
-  font-weight: 700;
-  text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
-  transition: all var(--transition-normal);
-  cursor: pointer;
-  overflow: hidden;
-}
-
-.tile-placeholder::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: 
-    radial-gradient(circle at center, 
-      rgba(212, 175, 55, 0.1) 0%, 
-      transparent 70%);
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  padding: 40px;
+  border: 3px dashed rgba(255,215,0,0.6);
+  border-radius: 20px;
+  background: rgba(0,0,0,0.2);
+  backdrop-filter: blur(5px);
   animation: placeholderPulse 2s ease-in-out infinite;
 }
 
 @keyframes placeholderPulse {
   0%, 100% {
-    opacity: 0.5;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 1;
-    transform: scale(1.05);
-  }
-}
-
-.drop-target {
-  position: relative;
-}
-
-.drop-target::after {
-  content: "";
-  position: absolute;
-  inset: -4px;
-  border: 3px solid var(--accent-gold);
-  border-radius: var(--radius-md);
-  opacity: 0.8;
-  pointer-events: none;
-  animation: dropTargetPulse 1.5s ease-in-out infinite;
-  background: rgba(212, 175, 55, 0.1);
-}
-
-@keyframes dropTargetPulse {
-  0%, 100% {
-    transform: scale(1);
     opacity: 0.6;
+    transform: translate(-50%, -50%) scale(1);
   }
   50% {
-    transform: scale(1.05);
     opacity: 1;
+    transform: translate(-50%, -50%) scale(1.05);
   }
 }
 
-.drop-hover, #board.drop-hover {
-  background: rgba(212, 175, 55, 0.2) !important;
-  border-color: var(--accent-light) !important;
-}
-
-.drop-hover::after {
-  opacity: 1;
-  border-color: var(--accent-light);
-  animation: none;
-  transform: scale(1);
-  background: rgba(212, 175, 55, 0.3);
-}
-
-/* ────────────────────────────────────────────────────────────────────────
- * Pip Counts Display
- * ────────────────────────────────────────────────────────────────────── */
-#pipCounts {
-  font-family: 'Courier New', monospace;
-  font-size: 0.85rem;
-  background: #f8f9fa;
-  padding: var(--space-sm);
-  border-radius: var(--radius-sm);
-  border: 1px solid #e9ecef;
-  text-align: center;
-  color: var(--text-secondary);
-}
-
-/* ────────────────────────────────────────────────────────────────────────
- * Lobby Styles
- * ────────────────────────────────────────────────────────────────────── */
-#lobbyContainer {
-  display: none;
-}
-
-#lobbyList {
-  list-style: none;
-  background: #f8f9fa;
-  border-radius: var(--radius-sm);
-  padding: var(--space-sm);
-}
-
-#lobbyList li {
-  padding: var(--space-xs) var(--space-sm);
-  border-bottom: 1px solid #e9ecef;
-  color: var(--text-secondary);
-  font-weight: 500;
-}
-
-#lobbyList li:last-child {
-  border-bottom: none;
-}
-
-/* ────────────────────────────────────────────────────────────────────────
- * Responsive Design
- * ────────────────────────────────────────────────────────────────────── */
-@media (max-width: 1200px) {
-  .game-container {
-    grid-template-columns: 260px 1fr;
-    gap: var(--space-md);
-  }
-  
-  .info-panel {
-    padding: var(--space-md);
-  }
-  
-  .board-domino {
-    width: 35px;
-    height: 70px;
-  }
-  
-  .hand-domino {
-    width: 25px;
-    height: 50px;
-  }
-}
-
-@media (max-width: 768px) {
-  body {
-    padding: var(--space-sm);
-  }
-  
-  .game-container {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto 1fr;
-    height: 100vh;
-  }
-  
-  .info-panel {
-    order: 2;
-    max-height: 200px;
-  }
-  
-  .game-table {
-    order: 1;
-    grid-template-columns: 1fr;
-    grid-template-rows: 80px 1fr 80px 120px;
-    grid-template-areas:
-      "top-player"
-      "board"
-      "left-player right-player"
-      "player-hand";
-  }
-  
-  .board-domino {
-    width: 30px;
-    height: 60px;
-  }
-  
-  .hand-domino {
-    width: 20px;
-    height: 40px;
-  }
-  
-  .domino-section {
-    font-size: 8px;
-  }
-}
-
-/* ────────────────────────────────────────────────────────────────────────
- * Accessibility and Reduced Motion
- * ────────────────────────────────────────────────────────────────────── */
-@media (prefers-reduced-motion: reduce) {
-  * {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-  }
-  
-  .tile.dragging, .domino-dragging {
-    transform: scale(1.1);
-  }
-  
-  .drop-target::after {
-    animation: none;
-  }
-  
-  .active-turn-indicator {
-    animation: none;
-  }
-}
-
-/* High contrast mode support */
-@media (prefers-contrast: high) {
-  :root {
-    --domino-border: #000000;
-    --pip-color: #000000;
-    --text-primary: #000000;
-    --accent-gold: #000080;
-  }
-  
-  .tile, .board-domino, .hand-domino {
-    border-width: 3px;
-  }
-  
-  .pip {
-    background: #000000;
-  }
-  
-  .domino-section {
-    color: #000000;
-    font-weight: 900;
-  }
-}
-
-/* ────────────────────────────────────────────────────────────────────────
- * Print Styles
- * ────────────────────────────────────────────────────────────────────── */
-@media print {
-  body {
-    background: white;
-    color: black;
-  }
-  
-  .game-container {
-    box-shadow: none;
-    filter: none;
-  }
-  
-  .tile, .board-domino, .hand-domino {
-    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-  }
-  
-  .game-table {
-    background: white;
-    border: 1px solid black;
-  }
-}
-
-/* ────────────────────────────────────────────────────────────────────────
- * Animation Keyframes
- * ────────────────────────────────────────────────────────────────────── */
 @keyframes dominoPlace {
   0% { 
     transform: scale(1.2) rotate(0deg); 
@@ -998,49 +761,11 @@ body {
   animation: dominoPlace 0.5s ease-out;
 }
 
-/* ────────────────────────────────────────────────────────────────────────
- * Utility Classes
- * ────────────────────────────────────────────────────────────────────── */
-.visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
+@keyframes celebration {
+  0%, 100% { transform: scale(1); }
+  25% { transform: scale(1.1) rotate(2deg); }
+  50% { transform: scale(1.05) rotate(-1deg); }
+  75% { transform: scale(1.1) rotate(1deg); }
 }
 
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-
-.no-scroll {
-  overflow: hidden;
-}
-
-.pointer-events-none {
-  pointer-events: none;
-}
-
-.cursor-pointer {
-  cursor: pointer;
-}
-
-.cursor-grab {
-  cursor: grab;
-}
-
-.cursor-grabbing {
-  cursor: grabbing;
-}
+/* ───────────────────────────────────────────────────────────────
