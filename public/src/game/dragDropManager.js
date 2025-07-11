@@ -1,11 +1,11 @@
 /* =====================================================================
  * src/game/dragDropManager.js — Handles Domino Dragging
- *
+ * 
  * AI NOTES:
- * - Drag/drop interface using GameState and BoardRenderer
- * - Uses GameState.getBoardEnds() to render accurate drop zones
- * - Only allows drops on left/right ends, UI emits side to server
- * - Claude: You may improve animations or tile rotations, but keep logic
+ * - Supports both mouse and touch
+ * - Visual feedback during drag
+ * - Validates drop locations
+ * - FIXED: Bug 2 - Works with specific drop zones
  * =================================================================== */
 
 const DragDropManager = {
@@ -18,146 +18,171 @@ const DragDropManager = {
     offsetY: 0,
     hoveredZone: null
   },
-
+  
   /**
-   * Start dragging a tile from player's hand
+   * Start dragging a domino
    */
   startDrag(event, tile, tileElement) {
-    if (event.type === 'touchstart') event.preventDefault();
+    if (event.type === 'touchstart') {
+      event.preventDefault();
+    }
+    
     if (this.dragState.isDragging || !GameState.isMyTurn()) return;
     if (!GameState.isTilePlayable(tile)) return;
-
+    
+    // Set drag state
+    this.dragState.tileData = tile;
+    this.dragState.originalTile = tileElement;
+    this.dragState.isDragging = true;
+    
+    // Get position
     const pos = this.getEventPosition(event);
     const rect = tileElement.getBoundingClientRect();
-
-    this.dragState = {
-      ...this.dragState,
-      tileData: tile,
-      originalTile: tileElement,
-      isDragging: true,
-      offsetX: pos.x - rect.left,
-      offsetY: pos.y - rect.top
-    };
-
-    // Clone dragged tile for smooth drag experience
-    const ghost = tileElement.cloneNode(true);
-    ghost.style.cssText = `
+    this.dragState.offsetX = pos.x - rect.left;
+    this.dragState.offsetY = pos.y - rect.top;
+    
+    // Create dragged element
+    this.dragState.element = tileElement.cloneNode(true);
+    this.dragState.element.style.cssText = `
       position: fixed;
-      z-index: 999;
       pointer-events: none;
-      opacity: 0.9;
-      transform: scale(1.05);
-      width: ${tileElement.offsetWidth}px;
-      height: ${tileElement.offsetHeight}px;
+      z-index: 1000;
+      opacity: 0.8;
+      transform: scale(1.1);
       left: ${pos.x - this.dragState.offsetX}px;
       top: ${pos.y - this.dragState.offsetY}px;
+      width: 30px;
+      height: 60px;
     `;
-    document.body.appendChild(ghost);
-    this.dragState.element = ghost;
-
+    document.body.appendChild(this.dragState.element);
+    
+    // Hide original
     tileElement.style.opacity = '0.3';
-
+    
+    // Add event listeners
     document.addEventListener('mousemove', this.handleDragMove.bind(this));
     document.addEventListener('mouseup', this.handleDragEnd.bind(this));
     document.addEventListener('touchmove', this.handleDragMove.bind(this), { passive: false });
     document.addEventListener('touchend', this.handleDragEnd.bind(this));
-
-    // AI NOTE: Show only valid ends using current board state
-    BoardRenderer.showDropZones(GameState.getBoardEnds());
+    
+    // Show drop zones
+    BoardRenderer.showDropZones();
   },
-
+  
   /**
-   * Move tile as user drags it
+   * Handle drag movement - UPDATED FOR SPECIFIC DROP ZONES
    */
   handleDragMove(event) {
     if (!this.dragState.isDragging) return;
+    
     event.preventDefault();
-
     const pos = this.getEventPosition(event);
-    const { element, offsetX, offsetY } = this.dragState;
-
-    element.style.left = `${pos.x - offsetX}px`;
-    element.style.top = `${pos.y - offsetY}px`;
-
-    // Detect drop zone collision
-    const zones = document.querySelectorAll('.drop-zone');
-    let hovered = null;
-
-    zones.forEach(zone => {
+    
+    // Update position
+    this.dragState.element.style.left = `${pos.x - this.dragState.offsetX}px`;
+    this.dragState.element.style.top = `${pos.y - this.dragState.offsetY}px`;
+    
+    // Check for hover over drop zones (not entire board)
+    const dropZones = document.querySelectorAll('.drop-zone');
+    let hoveredZone = null;
+    
+    dropZones.forEach(zone => {
       const rect = zone.getBoundingClientRect();
       const isOver = pos.x >= rect.left && pos.x <= rect.right &&
                      pos.y >= rect.top && pos.y <= rect.bottom;
+      
       if (isOver) {
-        hovered = zone;
-        zone.classList.add('active-drop-zone');
+        hoveredZone = zone;
+        zone.style.opacity = '1';
+        zone.style.background = 'rgba(255, 215, 0, 0.3)';
+        zone.style.borderColor = '#ffd700';
+        zone.style.borderWidth = '3px';
       } else {
-        zone.classList.remove('active-drop-zone');
+        zone.style.opacity = '0.5';
+        zone.style.background = 'rgba(255, 215, 0, 0.1)';
+        zone.style.borderColor = '#ffd700';
+        zone.style.borderWidth = '2px';
       }
     });
-
-    this.dragState.hoveredZone = hovered;
-    document.body.style.cursor = hovered ? 'pointer' : 'not-allowed';
+    
+    this.dragState.hoveredZone = hoveredZone;
+    
+    // Update cursor
+    document.body.style.cursor = hoveredZone ? 'pointer' : 'not-allowed';
   },
-
+  
   /**
-   * End of drag event
+   * Handle drag end - UPDATED FOR SPECIFIC DROP ZONES
    */
   handleDragEnd(event) {
     if (!this.dragState.isDragging) return;
-
-    const zone = this.dragState.hoveredZone;
-
-    if (zone) {
-      const side = zone.dataset.side;
-
-      // Emit tile and side to server
+    
+    // Check if dropped on a valid zone
+    if (this.dragState.hoveredZone) {
+      const side = this.dragState.hoveredZone.dataset.side;
+      
+      // Play the tile
       window.socket.emit('playTile', {
         roomId: GameState.roomId,
         seat: GameState.mySeat,
         tile: this.dragState.tileData,
         side: side
       });
+      
+      console.log('Dropped tile on', side, 'side');
     } else {
-      // Animate back if drop was invalid
+      // Not dropped on valid zone - animate back
       this.animateBack();
     }
-
+    
+    // Cleanup
     this.cleanup();
   },
-
+  
   /**
-   * Animate tile return if dropped outside
+   * Animate tile back to original position
    */
   animateBack() {
-    const { element, originalTile } = this.dragState;
-    if (!element || !originalTile) return;
-
-    const rect = originalTile.getBoundingClientRect();
-    element.style.transition = 'all 0.3s ease';
-    element.style.left = `${rect.left}px`;
-    element.style.top = `${rect.top}px`;
-    element.style.transform = 'scale(1)`;
-
-    setTimeout(() => this.cleanup(), 300);
+    if (this.dragState.element && this.dragState.originalTile) {
+      const originalRect = this.dragState.originalTile.getBoundingClientRect();
+      this.dragState.element.style.transition = 'all 0.3s ease';
+      this.dragState.element.style.left = `${originalRect.left}px`;
+      this.dragState.element.style.top = `${originalRect.top}px`;
+      this.dragState.element.style.transform = 'scale(1)';
+      
+      setTimeout(() => {
+        this.cleanup();
+      }, 300);
+    }
   },
-
+  
   /**
-   * Reset drag state and cleanup UI
+   * Clean up drag state
    */
   cleanup() {
-    const { element, originalTile } = this.dragState;
-
-    if (element) element.remove();
-    if (originalTile) originalTile.style.opacity = '1';
-
+    // Remove dragged element
+    if (this.dragState.element) {
+      this.dragState.element.remove();
+    }
+    
+    // Restore original tile
+    if (this.dragState.originalTile) {
+      this.dragState.originalTile.style.opacity = '1';
+    }
+    
+    // Hide drop zones
     BoardRenderer.hideDropZones();
+    
+    // Reset cursor
     document.body.style.cursor = 'default';
-
+    
+    // Remove event listeners
     document.removeEventListener('mousemove', this.handleDragMove);
     document.removeEventListener('mouseup', this.handleDragEnd);
     document.removeEventListener('touchmove', this.handleDragMove);
     document.removeEventListener('touchend', this.handleDragEnd);
-
+    
+    // Reset state
     this.dragState = {
       element: null,
       originalTile: null,
@@ -168,9 +193,9 @@ const DragDropManager = {
       hoveredZone: null
     };
   },
-
+  
   /**
-   * Get mouse/touch position
+   * Get event position (mouse or touch)
    */
   getEventPosition(event) {
     if (event.touches && event.touches.length > 0) {
@@ -185,5 +210,3 @@ const DragDropManager = {
     };
   }
 };
-
-export default DragDropManager;
