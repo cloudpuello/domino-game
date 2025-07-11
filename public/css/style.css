@@ -197,10 +197,10 @@ body {
   display: block;
 }
 
-/* Game Table Layout */
+/* Game Table Layout - WIDER SIDES for better domino display */
 .game-table {
   display: grid;
-  grid-template-columns: 120px 1fr 120px;
+  grid-template-columns: 180px 1fr 180px; /* 🔥 WIDER sides: 120px → 180px */
   grid-template-rows: 100px 1fr 140px;
   grid-template-areas:
     "top-player top-player top-player"
@@ -309,18 +309,26 @@ body {
   height: 100px; /* Fixed height */
 }
 
-/* FIX 3: Side players with explicit height and proper overflow */
+/* FINAL FIX: Side players use horizontal wrap layout for clear counting */
 .position-left .player-hand-container,
 .position-right .player-hand-container {
-  flex-direction: column;
-  justify-content: flex-end; /* 🔥 FIXED: Stack from bottom-up like holding dominoes */
+  flex-direction: row; /* 🔥 Horizontal like top/bottom */
+  flex-wrap: wrap; /* Wrap to new lines */
+  justify-content: center;
   align-items: center;
-  height: calc(100% - 32px); /* Full height minus padding for name */
+  align-content: center; /* Center wrapped content */
+  height: calc(100% - 32px);
   width: 100%;
-  padding: 10px 8px;
-  gap: 8px; /* Increased gap for better spacing */
-  overflow-y: auto; /* Now this will work because we have explicit height */
-  scroll-behavior: smooth;
+  padding: 8px;
+  gap: 4px; /* Same as top/bottom */
+  overflow: auto;
+}
+
+/* Side dominoes use same styling as top/bottom */
+.position-left .hand-domino,
+.position-right .hand-domino {
+  margin: 3px; /* Same as top/bottom */
+  transform: none; /* No rotation - keep them flat */
 }
 
 /* FIX 4: Hand dominoes with consistent sizing and no stacking */
