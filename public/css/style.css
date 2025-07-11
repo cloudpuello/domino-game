@@ -313,7 +313,7 @@ body {
 .position-left .player-hand-container,
 .position-right .player-hand-container {
   flex-direction: column;
-  justify-content: flex-start;
+  justify-content: flex-end; /* 🔥 FIXED: Stack from bottom-up like holding dominoes */
   align-items: center;
   height: calc(100% - 32px); /* Full height minus padding for name */
   width: 100%;
