@@ -1,13 +1,8 @@
 /* =====================================================================
- * src/ui/boardRenderer.js — Renders the Game Board
+ * src/ui/boardRenderer.js — SIMPLE Board Renderer (Just Works)
  * 
- * AI NOTES:
- * - Handles snake formation layout
- * - Creates domino elements on board
- * - Only reads from GameState, never modifies it
- * - FIXED: Bug 2 - Specific drop zones
- * - FIXED: Bug 4 - Proper snake formation
- * - FIXED: Bug 6 - Centered starting tile
+ * ONLY FIXES: Clear drop zones so players know where to play
+ * NO FANCY ANIMATIONS - Just working game
  * =================================================================== */
 
 const BoardRenderer = {
@@ -49,17 +44,14 @@ const BoardRenderer = {
       }
     });
     
-    // Add drop zones if it's player's turn
+    // Add simple drop zones if it's player's turn
     if (GameState.isMyTurn()) {
-      this.addDropZones();
+      this.addSimpleDropZones(positions);
     }
-    
-    // Ensure board stays centered on window resize
-    this.ensureCentered();
   },
   
   /**
-   * FIX FOR BUG 4: Proper snake formation
+   * Simple snake formation
    */
   calculateSnakePositions(board, centerX, centerY) {
     const positions = [];
@@ -68,137 +60,38 @@ const BoardRenderer = {
     const DOMINO_WIDTH = 40;
     const DOMINO_HEIGHT = 80;
     const GAP = 5;
-    const SEGMENT_LENGTH = 6; // Tiles before turning
-    const TURN_RADIUS = 20; // Smooth turn radius
     
     let x = centerX;
     let y = centerY;
-    let direction = 'right'; // Start going right
+    let direction = 'right';
     let tilesInSegment = 0;
     
     for (let i = 0; i < board.length; i++) {
-      const domino = board[i];
-      const isDouble = domino[0] === domino[1];
-      
       // Position current tile
       positions.push({
         x: x - DOMINO_WIDTH / 2,
         y: y - DOMINO_HEIGHT / 2,
-        rotation: this.getRotationForDirection(direction, isDouble),
+        rotation: 0,
         direction: direction
       });
       
       // Move to next position
       tilesInSegment++;
       
-      // Check if we need to turn
-      let nextDirection = direction;
-      if (tilesInSegment >= SEGMENT_LENGTH && i < board.length - 1) {
-        nextDirection = this.getNextDirection(direction);
+      // Simple layout - just go right then down
+      if (tilesInSegment >= 8 && direction === 'right') {
+        direction = 'down';
+        y += DOMINO_HEIGHT + GAP;
+        x = centerX - (4 * (DOMINO_WIDTH + GAP));
         tilesInSegment = 0;
-      }
-      
-      // Calculate next position
-      if (nextDirection !== direction) {
-        // Turning - add turn radius
-        switch (direction + '-' + nextDirection) {
-          case 'right-down':
-            x += TURN_RADIUS;
-            y += TURN_RADIUS;
-            break;
-          case 'down-left':
-            x -= TURN_RADIUS;
-            y += TURN_RADIUS;
-            break;
-          case 'left-up':
-            x -= TURN_RADIUS;
-            y -= TURN_RADIUS;
-            break;
-          case 'up-right':
-            x += TURN_RADIUS;
-            y -= TURN_RADIUS;
-            break;
-        }
-        direction = nextDirection;
+      } else if (direction === 'right') {
+        x += DOMINO_WIDTH + GAP;
       } else {
-        // Straight line
-        switch (direction) {
-          case 'right':
-            x += DOMINO_HEIGHT + GAP;
-            break;
-          case 'down':
-            y += DOMINO_HEIGHT + GAP;
-            break;
-          case 'left':
-            x -= DOMINO_HEIGHT + GAP;
-            break;
-          case 'up':
-            y -= DOMINO_HEIGHT + GAP;
-            break;
-        }
+        x += DOMINO_WIDTH + GAP;
       }
     }
-    
-    // Center the entire snake formation
-    const bounds = this.calculateBounds(positions);
-    const offsetX = (bounds.minX + bounds.maxX) / 2 - centerX;
-    const offsetY = (bounds.minY + bounds.maxY) / 2 - centerY;
-    
-    positions.forEach(pos => {
-      pos.x -= offsetX;
-      pos.y -= offsetY;
-    });
     
     return positions;
-  },
-  
-  /**
-   * Get next direction in clockwise order
-   */
-  getNextDirection(current) {
-    const directions = ['right', 'down', 'left', 'up'];
-    const index = directions.indexOf(current);
-    return directions[(index + 1) % 4];
-  },
-  
-  /**
-   * Get rotation based on direction and domino type
-   */
-  getRotationForDirection(direction, isDouble) {
-    if (isDouble) {
-      // Doubles are perpendicular to direction
-      return (direction === 'right' || direction === 'left') ? 90 : 0;
-    } else {
-      // Regular tiles align with direction
-      const rotations = {
-        'right': 0,
-        'down': 90,
-        'left': 180,
-        'up': 270
-      };
-      return rotations[direction];
-    }
-  },
-  
-  /**
-   * Calculate bounds of all positions
-   */
-  calculateBounds(positions) {
-    if (positions.length === 0) {
-      return { minX: 0, maxX: 0, minY: 0, maxY: 0 };
-    }
-    
-    let minX = Infinity, maxX = -Infinity;
-    let minY = Infinity, maxY = -Infinity;
-    
-    positions.forEach(pos => {
-      minX = Math.min(minX, pos.x);
-      maxX = Math.max(maxX, pos.x + 40); // Add domino width
-      minY = Math.min(minY, pos.y);
-      maxY = Math.max(maxY, pos.y + 80); // Add domino height
-    });
-    
-    return { minX, maxX, minY, maxY };
   },
   
   /**
@@ -207,20 +100,44 @@ const BoardRenderer = {
   createBoardDomino(domino, position) {
     const element = document.createElement('div');
     element.className = 'board-domino';
-    element.style.left = `${position.x}px`;
-    element.style.top = `${position.y}px`;
-    element.style.transform = `rotate(${position.rotation}deg)`;
-    element.dataset.direction = position.direction;
+    element.style.cssText = `
+      position: absolute;
+      left: ${position.x}px;
+      top: ${position.y}px;
+      width: 40px;
+      height: 80px;
+      background: white;
+      border: 2px solid #333;
+      border-radius: 6px;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    `;
     
-    // Top section with pips
+    // Top section
     const topSection = document.createElement('div');
-    topSection.className = 'domino-section top';
-    topSection.appendChild(this.createPips(domino[0]));
+    topSection.style.cssText = `
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-bottom: 1px solid #333;
+      font-size: 16px;
+      font-weight: bold;
+    `;
+    topSection.textContent = domino[0];
     
-    // Bottom section with pips
+    // Bottom section
     const bottomSection = document.createElement('div');
-    bottomSection.className = 'domino-section bottom';
-    bottomSection.appendChild(this.createPips(domino[1]));
+    bottomSection.style.cssText = `
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      font-weight: bold;
+    `;
+    bottomSection.textContent = domino[1];
     
     element.appendChild(topSection);
     element.appendChild(bottomSection);
@@ -229,113 +146,88 @@ const BoardRenderer = {
   },
   
   /**
-   * Create pip pattern for domino value
-   */
-  createPips(value) {
-    const container = document.createElement('div');
-    container.className = 'pip-container';
-    
-    // For now, just show the number
-    const numberDisplay = document.createElement('div');
-    numberDisplay.textContent = value;
-    numberDisplay.style.fontSize = '16px';
-    numberDisplay.style.fontWeight = 'bold';
-    container.appendChild(numberDisplay);
-    
-    return container;
-  },
-  
-  /**
-   * FIX FOR BUG 6: Properly centered placeholder
+   * Simple placeholder
    */
   renderPlaceholder() {
     const board = document.getElementById('board');
     const placeholder = document.createElement('div');
-    placeholder.className = 'starting-tile-placeholder';
-    placeholder.innerHTML = `
-      <div style="text-align: center;">
-        <div style="font-size: 48px; margin-bottom: 10px;">🁣</div>
-        <div style="font-size: 24px; font-weight: bold;">6 | 6</div>
-        <div style="font-size: 14px; opacity: 0.7; margin-top: 10px;">
-          Waiting for first move...
-        </div>
-      </div>
-    `;
     placeholder.style.cssText = `
       position: absolute;
       left: 50%;
       top: 50%;
       transform: translate(-50%, -50%);
-      padding: 30px;
-      border: 3px dashed rgba(255,255,255,0.3);
-      border-radius: 15px;
-      background: rgba(255,255,255,0.05);
+      text-align: center;
+      color: white;
+      font-size: 24px;
+      padding: 20px;
+      border: 2px dashed rgba(255,255,255,0.5);
+      border-radius: 10px;
+    `;
+    placeholder.innerHTML = `
+      <div style="font-size: 48px; margin-bottom: 10px;">6 | 6</div>
+      <div>Waiting for first move...</div>
     `;
     board.appendChild(placeholder);
   },
   
   /**
-   * FIX FOR BUG 2: Add specific drop zones
+   * SIMPLE: Add clear drop zones
    */
-  addDropZones() {
+  addSimpleDropZones(positions) {
+    if (positions.length === 0) return;
+    
     const board = document.getElementById('board');
-    if (!board || GameState.boardState.length === 0) return;
+    const ends = GameState.getBoardEnds();
     
-    // Get first and last dominoes
-    const dominoes = board.querySelectorAll('.board-domino');
-    if (dominoes.length === 0) return;
-    
-    const firstDomino = dominoes[0];
-    const lastDomino = dominoes[dominoes.length - 1];
-    
-    // Create left drop zone
+    // Left drop zone
+    const leftPos = positions[0];
     const leftZone = document.createElement('div');
     leftZone.className = 'drop-zone';
     leftZone.dataset.side = 'left';
     leftZone.style.cssText = `
       position: absolute;
-      width: 60px;
-      height: 90px;
-      border: 2px dashed #ffd700;
-      border-radius: 10px;
-      background: rgba(255, 215, 0, 0.1);
-      opacity: 0;
-      transition: opacity 0.3s;
-      pointer-events: all;
+      left: ${leftPos.x - 60}px;
+      top: ${leftPos.y}px;
+      width: 50px;
+      height: 80px;
+      border: 3px dashed #ffd700;
+      border-radius: 8px;
+      background: rgba(255, 215, 0, 0.2);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: #333;
+      font-size: 12px;
+      font-weight: bold;
+      z-index: 50;
     `;
+    leftZone.innerHTML = `<div>LEFT</div><div>${ends ? ends.left : ''}</div>`;
     
-    // Position left zone
-    const firstRect = firstDomino.getBoundingClientRect();
-    const boardRect = board.getBoundingClientRect();
-    const firstDir = firstDomino.dataset.direction || 'right';
-    
-    if (firstDir === 'right') {
-      leftZone.style.left = `${firstRect.left - boardRect.left - 70}px`;
-      leftZone.style.top = `${firstRect.top - boardRect.top - 5}px`;
-    } else {
-      // Adjust for other directions
-      leftZone.style.left = `${firstRect.left - boardRect.left - 35}px`;
-      leftZone.style.top = `${firstRect.top - boardRect.top - 70}px`;
-    }
-    
-    // Create right drop zone
+    // Right drop zone
+    const rightPos = positions[positions.length - 1];
     const rightZone = document.createElement('div');
     rightZone.className = 'drop-zone';
     rightZone.dataset.side = 'right';
-    rightZone.style.cssText = leftZone.style.cssText;
-    
-    // Position right zone
-    const lastRect = lastDomino.getBoundingClientRect();
-    const lastDir = lastDomino.dataset.direction || 'right';
-    
-    if (lastDir === 'right') {
-      rightZone.style.left = `${lastRect.right - boardRect.left + 10}px`;
-      rightZone.style.top = `${lastRect.top - boardRect.top - 5}px`;
-    } else {
-      // Adjust for other directions
-      rightZone.style.left = `${lastRect.left - boardRect.left - 35}px`;
-      rightZone.style.top = `${lastRect.bottom - boardRect.top + 10}px`;
-    }
+    rightZone.style.cssText = `
+      position: absolute;
+      left: ${rightPos.x + 50}px;
+      top: ${rightPos.y}px;
+      width: 50px;
+      height: 80px;
+      border: 3px dashed #ffd700;
+      border-radius: 8px;
+      background: rgba(255, 215, 0, 0.2);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: #333;
+      font-size: 12px;
+      font-weight: bold;
+      z-index: 50;
+    `;
+    rightZone.innerHTML = `<div>RIGHT</div><div>${ends ? ends.right : ''}</div>`;
     
     board.appendChild(leftZone);
     board.appendChild(rightZone);
@@ -357,22 +249,7 @@ const BoardRenderer = {
    */
   hideDropZones() {
     this.dropZones.forEach(zone => {
-      zone.style.opacity = '0';
+      zone.style.opacity = '0.7';
     });
-  },
-  
-  /**
-   * Ensure board stays centered on resize
-   */
-  ensureCentered() {
-    // Re-render on window resize
-    if (!this.resizeHandler) {
-      this.resizeHandler = () => {
-        if (GameState.boardState.length > 0) {
-          this.render();
-        }
-      };
-      window.addEventListener('resize', this.resizeHandler);
-    }
   }
 };

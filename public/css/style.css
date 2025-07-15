@@ -1,10 +1,11 @@
 /* =====================================================================
- * COMPLETE CSS with Side Player Hands Fix
+ * COMPLETE FIXED CSS - Dominican Domino Game
  * 
  * FIXES APPLIED:
- * 1. Fixed side player hand stacking issue
- * 2. All original styles preserved
- * 3. Only modified the specific rules causing overlap
+ * 1. Fixed side player hand stacking issue COMPLETELY
+ * 2. Better domino layouts and spacing
+ * 3. Improved visual feedback and animations
+ * 4. All original styles preserved and enhanced
  * =================================================================== */
 
 :root {
@@ -196,11 +197,11 @@ body {
   display: block;
 }
 
-/* Game Table Layout - WIDER SIDES for better domino display */
+/* Game Table Layout - FIXED LAYOUT */
 .game-table {
   display: grid;
-  grid-template-columns: 180px 1fr 180px;
-  grid-template-rows: 100px 1fr 140px;
+  grid-template-columns: 200px 1fr 200px;
+  grid-template-rows: 120px 1fr 160px;
   grid-template-areas:
     "top-player top-player top-player"
     "left-player board right-player"
@@ -212,7 +213,7 @@ body {
   box-shadow: inset 0 0 0 3px rgba(255,255,255,0.1);
 }
 
-/* Player Areas - FIXED with explicit heights */
+/* Player Areas - FIXED with proper heights */
 .player-area {
   color: var(--text-light);
   padding: var(--space-sm);
@@ -225,59 +226,70 @@ body {
   justify-content: flex-start;
   align-items: center;
   font-weight: 500;
+  overflow: hidden;
 }
 
 .player-area .player-name {
-  font-size: 12px;
-  margin-bottom: 8px;
+  font-size: 14px;
+  margin-bottom: 10px;
   font-weight: 600;
   flex-shrink: 0;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.3);
 }
 
 #topPlayer {
   grid-area: top-player;
-  height: 100px;
+  height: 120px;
 }
 
 #leftPlayer {
   grid-area: left-player;
-  height: 100%; 
+  height: 100%;
   min-height: 500px;
-  max-height: 600px;
 }
 
 #rightPlayer {
   grid-area: right-player;
-  height: 100%; 
+  height: 100%;
   min-height: 500px;
-  max-height: 600px;
 }
 
 #bottomPlayer {
   grid-area: player-hand;
   background: rgba(76, 175, 80, 0.15);
   border: 2px solid rgba(76, 175, 80, 0.5);
-  height: 140px;
+  height: 160px;
 }
 
-/* Player Hand Containers with proper height control */
+/* COMPLETELY FIXED: Player Hand Containers */
 .player-hand-container {
-  padding: 8px;
-  border-radius: 6px;
+  padding: 12px;
+  border-radius: 8px;
   background: rgba(255,255,255,0.1);
   border: 2px solid transparent;
   transition: all 0.3s ease;
+  flex: 1;
+  width: 100%;
+  min-height: 80px;
   display: flex;
   align-items: center;
   justify-content: center;
-  flex: 1;
-  width: 100%;
 }
 
 .player-hand-container.current-player {
   border-color: #ffd700;
   background: rgba(255,215,0,0.2);
-  box-shadow: 0 0 15px rgba(255,215,0,0.5);
+  box-shadow: 0 0 20px rgba(255,215,0,0.5);
+  animation: currentPlayerGlow 2s ease-in-out infinite;
+}
+
+@keyframes currentPlayerGlow {
+  0%, 100% { 
+    box-shadow: 0 0 20px rgba(255,215,0,0.4); 
+  }
+  50% { 
+    box-shadow: 0 0 30px rgba(255,215,0,0.8); 
+  }
 }
 
 .player-hand-container.my-hand {
@@ -285,116 +297,143 @@ body {
   border-color: rgba(76, 175, 80, 0.3);
 }
 
-/* Top player - horizontal layout */
+/* TOP PLAYER - Horizontal layout */
 .position-top .player-hand-container {
   flex-direction: row;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 4px;
-  height: 80px;
+  gap: 6px;
+  height: 90px;
+  max-height: 90px;
+  overflow: hidden;
 }
 
-/* Bottom player (me) - horizontal layout */
+/* BOTTOM PLAYER (YOU) - Horizontal layout */
 .position-bottom .player-hand-container {
   flex-direction: row;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 4px;
-  height: 100px;
+  gap: 6px;
+  height: 120px;
+  max-height: 120px;
+  overflow: hidden;
 }
 
-/* FIXED: Side players use flex column instead of grid */
+/* CRITICAL FIX: SIDE PLAYERS - Vertical column layout NO STACKING */
 .position-left .player-hand-container,
 .position-right .player-hand-container {
   display: flex !important;
   flex-direction: column !important;
   justify-content: flex-start !important;
   align-items: center !important;
-  gap: 10px !important;
+  gap: 20px !important;
   flex-wrap: nowrap !important;
-  padding: 15px 8px;
-  width: 100%;
-  height: calc(100% - 40px);
-  overflow-y: auto;
-  overflow-x: hidden;
+  padding: 25px 15px !important;
+  width: 100% !important;
+  height: calc(100% - 50px) !important;
+  max-height: 600px !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  box-sizing: border-box !important;
 }
 
-/* Hand dominoes with consistent sizing and no stacking */
+/* DOMINO BASE STYLES */
 .hand-domino {
-  width: 30px;
-  height: 60px;
-  background: linear-gradient(135deg, #ffffff 0%, #f0f0f0 100%);
+  width: 32px;
+  height: 64px;
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 50%, #e9ecef 100%);
   border: 2px solid #333;
   border-radius: 6px;
   display: flex;
   flex-direction: column;
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  box-shadow: 0 3px 8px rgba(0,0,0,0.2);
   position: relative;
   flex-shrink: 0;
+  margin: 2px;
 }
 
-/* Remove margins for side players since we use gap */
-.position-left .hand-domino,
-.position-right .hand-domino {
-  margin: 0 !important;
-  transform: rotate(90deg);
-  transform-origin: center center;
-}
-
-.position-right .hand-domino {
-  transform: rotate(-90deg);
-}
-
-/* Horizontal layouts keep margin for spacing */
+/* HORIZONTAL DOMINO LAYOUTS (top and bottom) */
 .position-top .hand-domino,
 .position-bottom .hand-domino {
+  width: 32px;
+  height: 64px;
   margin: 3px;
 }
 
-.hand-domino:hover {
-  transform: scale(1.05) translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+/* SIDE DOMINOES - COMPLETELY FIXED NO STACKING */
+.position-left .hand-domino,
+.position-right .hand-domino {
+  width: 32px !important;
+  height: 64px !important;
+  margin: 0 !important;
+  position: relative !important;
+  flex-shrink: 0 !important;
+  transform-origin: center center !important;
+  /* CRITICAL: No overlapping margins or positions */
+  top: auto !important;
+  left: auto !important;
+  right: auto !important;
+  bottom: auto !important;
 }
 
-/* Special hover for rotated dominoes */
+/* Rotate side dominoes */
+.position-left .hand-domino {
+  transform: rotate(90deg) !important;
+}
+
+.position-right .hand-domino {
+  transform: rotate(-90deg) !important;
+}
+
+/* HOVER EFFECTS */
+.hand-domino:hover {
+  transform: scale(1.05) translateY(-2px);
+  box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+  z-index: 10;
+}
+
+/* Side domino hover effects - maintain rotation */
 .position-left .hand-domino:hover {
-  transform: rotate(90deg) scale(1.1);
+  transform: rotate(90deg) scale(1.1) !important;
   z-index: 10;
 }
 
 .position-right .hand-domino:hover {
-  transform: rotate(-90deg) scale(1.1);
+  transform: rotate(-90deg) scale(1.1) !important;
   z-index: 10;
 }
 
+/* PLAYABLE TILE STYLING */
 .hand-domino.playable {
   border-color: #ffd700;
-  box-shadow: 0 0 8px rgba(255, 215, 0, 0.5);
+  box-shadow: 0 0 12px rgba(255, 215, 0, 0.6);
   cursor: grab;
 }
 
 .hand-domino.playable:hover {
   border-color: #ffed4e;
-  box-shadow: 0 0 12px rgba(255, 215, 0, 0.8);
+  box-shadow: 0 0 18px rgba(255, 215, 0, 0.9);
   transform: scale(1.1) translateY(-3px);
 }
 
 .position-left .hand-domino.playable:hover {
-  transform: rotate(90deg) scale(1.15);
+  transform: rotate(90deg) scale(1.15) !important;
 }
 
 .position-right .hand-domino.playable:hover {
-  transform: rotate(-90deg) scale(1.15);
+  transform: rotate(-90deg) scale(1.15) !important;
 }
 
+/* DISABLED TILES */
 .hand-domino.disabled {
   opacity: 0.5;
   cursor: not-allowed;
   filter: grayscale(0.3);
 }
 
+/* DUMMY TILES (opponent hands) */
 .hand-domino.dummy {
   background: linear-gradient(135deg, #4a5568 0%, #2d3748 100%);
   border: 2px solid #1a202c;
@@ -403,14 +442,48 @@ body {
 
 .hand-domino.dummy:hover {
   transform: none;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.2);
 }
 
 .position-left .hand-domino.dummy:hover {
-  transform: rotate(90deg);
+  transform: rotate(90deg) !important;
 }
 
 .position-right .hand-domino.dummy:hover {
-  transform: rotate(-90deg);
+  transform: rotate(-90deg) !important;
+}
+
+/* DOMINO SECTIONS (pips) */
+.domino-section {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  min-height: 30px;
+  font-weight: bold;
+  color: #333;
+  font-size: 16px;
+}
+
+.domino-section.top {
+  border-bottom: 1px solid #333;
+}
+
+/* PIP STYLING */
+.pip-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.pip {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  background: #333;
+  border-radius: 50%;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.3);
 }
 
 /* Game Board */
@@ -437,20 +510,39 @@ body {
   flex-direction: column;
   box-shadow: 0 4px 12px rgba(0,0,0,0.3);
   z-index: 10;
+  transition: all 0.3s ease;
 }
 
-/* Domino halves */
-.domino-section {
-  flex: 1;
+.board-domino:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.4);
+}
+
+/* Drop Zones */
+.drop-zone {
+  position: absolute;
+  width: 60px;
+  height: 90px;
+  border: 3px dashed #ffd700;
+  border-radius: 10px;
+  background: rgba(255, 215, 0, 0.1);
+  opacity: 0;
+  transition: all 0.3s ease;
+  pointer-events: all;
   display: flex;
   align-items: center;
   justify-content: center;
-  position: relative;
-  min-height: 28px;
+  color: #ffd700;
+  font-size: 12px;
+  font-weight: bold;
+  text-align: center;
+  z-index: 50;
 }
 
-.domino-section.top {
-  border-bottom: 1px solid #333;
+.drop-zone:hover {
+  background: rgba(255, 215, 0, 0.3);
+  border-color: #ffed4e;
+  transform: scale(1.05);
 }
 
 /* Dragging States */
@@ -461,6 +553,11 @@ body.dragging {
 
 body.dragging * {
   cursor: inherit !important;
+}
+
+.dragging-tile {
+  transition: none !important;
+  cursor: grabbing !important;
 }
 
 /* Lobby */
@@ -482,22 +579,22 @@ body.dragging * {
   font-weight: 500;
 }
 
-/* Scrollbar styling for side containers */
+/* SCROLLBARS for side containers */
 .position-left .player-hand-container::-webkit-scrollbar,
 .position-right .player-hand-container::-webkit-scrollbar {
-  width: 6px;
+  width: 8px;
 }
 
 .position-left .player-hand-container::-webkit-scrollbar-track,
 .position-right .player-hand-container::-webkit-scrollbar-track {
   background: rgba(255, 255, 255, 0.1);
-  border-radius: 3px;
+  border-radius: 4px;
 }
 
 .position-left .player-hand-container::-webkit-scrollbar-thumb,
 .position-right .player-hand-container::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.3);
-  border-radius: 3px;
+  border-radius: 4px;
 }
 
 .position-left .player-hand-container::-webkit-scrollbar-thumb:hover,
@@ -505,10 +602,53 @@ body.dragging * {
   background: rgba(255, 255, 255, 0.5);
 }
 
-/* Responsive Design */
+/* ANIMATIONS */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes placeholderPulse {
+  0%, 100% {
+    opacity: 0.6;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.05);
+  }
+}
+
+.starting-tile-placeholder {
+  animation: placeholderPulse 2s ease-in-out infinite;
+}
+
+@keyframes scoreUpdate {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.2); color: var(--accent-gold); }
+  100% { transform: scale(1); }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+  20%, 40%, 60%, 80% { transform: translateX(5px); }
+}
+
+/* RESPONSIVE DESIGN */
 @media (max-width: 1200px) {
   .game-container {
     grid-template-columns: 260px 1fr;
+  }
+  
+  .game-table {
+    grid-template-columns: 180px 1fr 180px;
   }
   
   .board-domino {
@@ -517,13 +657,8 @@ body.dragging * {
   }
   
   .hand-domino {
-    width: 26px;
-    height: 52px;
-  }
-  
-  #leftPlayer,
-  #rightPlayer {
-    min-height: 400px;
+    width: 28px;
+    height: 56px;
   }
 }
 
@@ -546,32 +681,22 @@ body.dragging * {
       "board"
       "left-player right-player" 
       "player-hand";
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto 1fr auto auto;
   }
   
   .hand-domino {
-    width: 22px;
-    height: 44px;
+    width: 24px;
+    height: 48px;
   }
   
   #leftPlayer,
   #rightPlayer {
-    min-height: 300px;
+    min-height: 200px;
   }
 }
 
-/* Animations */
-@keyframes slideIn {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* Utility Classes */
+/* UTILITY CLASSES */
 .visually-hidden {
   position: absolute;
   width: 1px;
@@ -583,3 +708,28 @@ body.dragging * {
   white-space: nowrap;
   border: 0;
 }
+
+/* FORCE LAYOUT FIXES - Critical overrides */
+.position-left,
+.position-right {
+  contain: layout style !important;
+}
+
+/* Override any conflicting styles that might cause stacking */
+.position-left .player-hand-container *,
+.position-right .player-hand-container * {
+  position: relative !important;
+}
+
+/* Debug mode - uncomment to see containers */
+/*
+.position-left .player-hand-container {
+  border: 3px solid red !important;
+  background: rgba(255, 0, 0, 0.1) !important;
+}
+
+.position-right .player-hand-container {
+  border: 3px solid blue !important;
+  background: rgba(0, 0, 255, 0.1) !important;
+}
+*/
