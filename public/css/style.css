@@ -1,10 +1,10 @@
 /* =====================================================================
- * COMPLETE FIXED CSS - All Original Styles + Side Hand Fix
+ * COMPLETE CSS with Side Player Hands Fix
  * 
  * FIXES APPLIED:
- * 1. Fixed side player hands stacking issue
- * 2. Using flex column with gap for side players
- * 3. All original styles preserved
+ * 1. Fixed side player hand stacking issue
+ * 2. All original styles preserved
+ * 3. Only modified the specific rules causing overlap
  * =================================================================== */
 
 :root {
@@ -303,15 +303,15 @@ body {
   height: 100px;
 }
 
-/* FIXED: Simple flex column for side players */
+/* FIXED: Side players use flex column instead of grid */
 .position-left .player-hand-container,
 .position-right .player-hand-container {
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: nowrap;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: flex-start !important;
+  align-items: center !important;
+  gap: 10px !important;
+  flex-wrap: nowrap !important;
   padding: 15px 8px;
   width: 100%;
   height: calc(100% - 40px);
@@ -335,12 +335,16 @@ body {
   flex-shrink: 0;
 }
 
-/* FIXED: Side player dominoes - no margin, gap handles spacing */
+/* Remove margins for side players since we use gap */
 .position-left .hand-domino,
 .position-right .hand-domino {
-  margin: 0;
-  flex-shrink: 0;
-  position: relative;
+  margin: 0 !important;
+  transform: rotate(90deg);
+  transform-origin: center center;
+}
+
+.position-right .hand-domino {
+  transform: rotate(-90deg);
 }
 
 /* Horizontal layouts keep margin for spacing */
@@ -354,6 +358,17 @@ body {
   box-shadow: 0 4px 12px rgba(0,0,0,0.3);
 }
 
+/* Special hover for rotated dominoes */
+.position-left .hand-domino:hover {
+  transform: rotate(90deg) scale(1.1);
+  z-index: 10;
+}
+
+.position-right .hand-domino:hover {
+  transform: rotate(-90deg) scale(1.1);
+  z-index: 10;
+}
+
 .hand-domino.playable {
   border-color: #ffd700;
   box-shadow: 0 0 8px rgba(255, 215, 0, 0.5);
@@ -364,6 +379,14 @@ body {
   border-color: #ffed4e;
   box-shadow: 0 0 12px rgba(255, 215, 0, 0.8);
   transform: scale(1.1) translateY(-3px);
+}
+
+.position-left .hand-domino.playable:hover {
+  transform: rotate(90deg) scale(1.15);
+}
+
+.position-right .hand-domino.playable:hover {
+  transform: rotate(-90deg) scale(1.15);
 }
 
 .hand-domino.disabled {
@@ -380,6 +403,14 @@ body {
 
 .hand-domino.dummy:hover {
   transform: none;
+}
+
+.position-left .hand-domino.dummy:hover {
+  transform: rotate(90deg);
+}
+
+.position-right .hand-domino.dummy:hover {
+  transform: rotate(-90deg);
 }
 
 /* Game Board */
