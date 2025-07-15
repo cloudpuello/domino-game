@@ -1,5 +1,5 @@
 /* =====================================================================
- * src/ui/uiManager.js — Handles All UI Updates (FIXED)
+ * src/ui/uiManager.js — Handles All UI Updates (COMPLETE FIXED)
  * 
  * FIXES APPLIED:
  * - Fixed side player hand stacking issue
@@ -179,7 +179,7 @@ const UIManager = {
         flex-direction: column !important;
         justify-content: flex-start !important;
         align-items: center !important;
-        gap: 10px !important;
+        gap: 8px !important;
         flex-wrap: nowrap !important;
         height: 100%;
         min-height: 300px;
@@ -415,3 +415,125 @@ const UIManager = {
       }
     }
   },
+  
+  /**
+   * Show error message with better styling
+   */
+  showError(text) {
+    if (this.elements.errors) {
+      this.elements.errors.textContent = text;
+      this.elements.errors.style.background = 'rgba(231, 76, 60, 0.1)';
+      this.elements.errors.style.borderColor = 'rgba(231, 76, 60, 0.3)';
+      this.elements.errors.style.animation = 'shake 0.5s ease-in-out';
+      
+      setTimeout(() => {
+        this.elements.errors.textContent = '';
+        this.elements.errors.style.animation = '';
+      }, 4000);
+    }
+  },
+  
+  /**
+   * Hide error message
+   */
+  hideError() {
+    if (this.elements.errors) {
+      this.elements.errors.textContent = '';
+      this.elements.errors.style.animation = '';
+    }
+  },
+  
+  /**
+   * Add message to log with timestamp
+   */
+  addMessage(text) {
+    if (this.elements.messages) {
+      const msg = document.createElement('div');
+      msg.style.cssText = `
+        padding: 4px 0;
+        border-bottom: 1px solid #e9ecef;
+        font-size: 13px;
+        animation: slideIn 0.3s ease-out;
+      `;
+      
+      const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      msg.innerHTML = `<span style="color: #6c757d;">[${time}]</span> ${text}`;
+      
+      this.elements.messages.insertBefore(msg, this.elements.messages.firstChild);
+      
+      // Keep only last 50 messages
+      while (this.elements.messages.children.length > 50) {
+        this.elements.messages.lastChild.remove();
+      }
+    }
+  },
+  
+  /**
+   * Show/hide lobby
+   */
+  showLobby(show) {
+    if (this.elements.lobbyContainer) {
+      this.elements.lobbyContainer.style.display = show ? 'block' : 'none';
+    }
+  },
+  
+  /**
+   * Update scores with animation
+   */
+  updateScores(scores) {
+    if (this.elements.team0Score) {
+      const newScore = scores[0] || 0;
+      if (parseInt(this.elements.team0Score.textContent) !== newScore) {
+        this.elements.team0Score.style.animation = 'scoreUpdate 0.5s ease-in-out';
+        setTimeout(() => {
+          this.elements.team0Score.style.animation = '';
+        }, 500);
+      }
+      this.elements.team0Score.textContent = newScore;
+    }
+    
+    if (this.elements.team1Score) {
+      const newScore = scores[1] || 0;
+      if (parseInt(this.elements.team1Score.textContent) !== newScore) {
+        this.elements.team1Score.style.animation = 'scoreUpdate 0.5s ease-in-out';
+        setTimeout(() => {
+          this.elements.team1Score.style.animation = '';
+        }, 500);
+      }
+      this.elements.team1Score.textContent = newScore;
+    }
+  },
+  
+  /**
+   * Show temporary notification
+   */
+  showNotification(text, type = 'info', duration = 3000) {
+    const notification = document.createElement('div');
+    notification.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      padding: 15px 20px;
+      background: ${type === 'error' ? '#e74c3c' : type === 'success' ? '#27ae60' : '#3498db'};
+      color: white;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      z-index: 10000;
+      font-weight: bold;
+      animation: slideInRight 0.3s ease-out;
+      max-width: 300px;
+    `;
+    
+    notification.textContent = text;
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+      notification.style.animation = 'slideOutRight 0.3s ease-in';
+      setTimeout(() => {
+        if (notification.parentNode) {
+          notification.remove();
+        }
+      }, 300);
+    }, duration);
+  }
+};
