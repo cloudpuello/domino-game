@@ -335,3 +335,5 @@ const HandRenderer = {
     console.log('================================');
   }
 };
+window.HandRenderer = HandRenderer;
+

@@ -253,3 +253,5 @@ const BoardRenderer = {
     });
   }
 };
+window.BoardRenderer = BoardRenderer;
+

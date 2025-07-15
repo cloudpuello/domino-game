@@ -75,3 +75,6 @@ const ConnectionManager = {
     });
   }
 };
+
+window.ConnectionManager = ConnectionManager;
+

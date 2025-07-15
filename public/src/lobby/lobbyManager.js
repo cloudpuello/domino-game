@@ -106,3 +106,4 @@ const LobbyManager = {
     UIManager.hideError();
   }
 };
+window.LobbyManager = LobbyManager;

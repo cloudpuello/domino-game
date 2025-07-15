@@ -537,3 +537,5 @@ const UIManager = {
     }, duration);
   }
 };
+window.UIManager = UIManager;
+
