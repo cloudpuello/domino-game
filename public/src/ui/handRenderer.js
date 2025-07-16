@@ -6,6 +6,7 @@
  * • Adds `.playable` when a tile is legal this turn.                  *
  * • Click → quick-play; if both ends open, defers to BoardRenderer.    *
  * • Drag hooks hand off to global DragDropManager.                    *
+ * • FIXED: Corrected GameState.board to GameState.boardState            *
  * ==================================================================== */
 
 (function () {
@@ -59,14 +60,33 @@
 
     // ---- interactivity only for my hand + my turn ----
     if (GameState.mySeat !== GameState.currentTurn) return el;
-    if (!window.DominoUtils.isTilePlayable([a, b], GameState.board)) return el;
+
+    // FIXED: Use GameState.boardState instead of GameState.board
+    if (!window.DominoUtils || !window.DominoUtils.isTilePlayable([a, b], GameState.boardState)) return el;
 
     el.classList.add('playable');
     el.title = 'Click or drag to play';
 
     el.addEventListener('click', () => handleClick([a, b]));
-    el.addEventListener('mousedown', (e) => DragDropManager.startDrag(e, [a, b], el));
-    el.addEventListener('touchstart', (e) => DragDropManager.startDrag(e, [a, b], el), { passive: false });
+
+    // Add drag support with proper error handling
+    if (window.DragDropManager && window.DragDropManager.startDrag) {
+      el.addEventListener('mousedown', (e) => {
+        try {
+          window.DragDropManager.startDrag(e, [a, b], el);
+        } catch (error) {
+          console.error('Error starting drag:', error);
+        }
+      });
+
+      el.addEventListener('touchstart', (e) => {
+        try {
+          window.DragDropManager.startDrag(e, [a, b], el);
+        } catch (error) {
+          console.error('Error starting touch drag:', error);
+        }
+      }, { passive: false });
+    }
 
     return el;
   }
@@ -93,7 +113,8 @@
       6: [[.25, .2], [.25, .5], [.25, .8], [.75, .2], [.75, .5], [.75, .8]],
     };
 
-    patterns[value].forEach(([x, y]) => {
+    const patternForValue = patterns[value] || [];
+    patternForValue.forEach(([x, y]) => {
       const pip = document.createElement('div');
       pip.className = 'domino-pip';
       pip.style.left = `${x * 100}%`;
@@ -108,24 +129,35 @@
 
   function handleClick(tile) {
     if (!GameState.isMyTurn()) return;
-    if (!window.DominoUtils.isTilePlayable(tile, GameState.board)) return;
 
-    const sides = window.DominoUtils.playableSides(tile, GameState.board);
+    // FIXED: Use GameState.boardState instead of GameState.board
+    if (!window.DominoUtils || !window.DominoUtils.isTilePlayable(tile, GameState.boardState)) return;
+
+    const sides = window.DominoUtils.playableSides(tile, GameState.boardState);
 
     if (sides.length === 1) {
       emitPlay(tile, sides[0]);
-    } else {
+    } else if (sides.length > 1) {
       // let BoardRenderer visually ask
-      BoardRenderer.promptSideChoice(tile, sides, emitPlay);
+      if (window.BoardRenderer && window.BoardRenderer.promptSideChoice) {
+        window.BoardRenderer.promptSideChoice(tile, sides, emitPlay);
+      } else {
+        // Fallback: just play on the first available side
+        emitPlay(tile, sides[0]);
+      }
     }
   }
 
   function emitPlay(tile, side) {
-    socket.emit('playTile', {
-      roomId: GameState.roomId,
-      seat: GameState.mySeat,
-      tile,
-      side
-    });
+    if (window.socket && GameState.roomId && GameState.mySeat !== null) {
+      window.socket.emit('playTile', {
+        roomId: GameState.roomId,
+        seat: GameState.mySeat,
+        tile,
+        side
+      });
+    } else {
+      console.error('Cannot emit play - missing socket, roomId, or seat');
+    }
   }
 })();
