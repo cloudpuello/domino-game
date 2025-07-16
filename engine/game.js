@@ -73,6 +73,26 @@ function initNewRound(room, io) {
   io.in(room.id).emit('turnChanged', opener);
 }
 
+/**
+ * AI NOTE: This new function centralizes the broadcasting of a move.
+ * It constructs the full payload, including the new `boardState` key and
+ * the `handSizes` object, that the client-side GameManager expects.
+ */
+function emitBroadcastMove(io, room, seat, tile) {
+    const handSizes = Object.fromEntries(
+      Object.entries(room.players)
+            .filter(([, player]) => player)
+            .map(([s, p]) => [s, p.hand.length])
+    );
+
+    io.in(room.id).emit('broadcastMove', {
+      seat,                   // who made the move
+      tile,                   // the tile played
+      boardState: room.board,     // NEW key name
+      handSizes                   // NEW – keeps counts in sync
+    });
+}
+
 
 /* ────────────────────────────────────────────────────────────────────────
  * Private Helper Functions
@@ -120,7 +140,19 @@ function _findPlayerWithOpeningTile(room) {
   return openerSeatStr !== undefined ? Number(openerSeatStr) : GC.SEAT_ORDER[0]; // Default to seat 0
 }
 
+/**
+ * AI NOTE: This function now correctly constructs and includes the `handSizes`
+ * object in the 'roundStart' payload, which is required by the client's
+ * GameManager to properly render opponent hand counts.
+ */
 function _notifyPlayersRoundStart(room, io, opener) {
+  // Create an object mapping each seat to its hand size.
+  const handSizes = Object.fromEntries(
+    Object.entries(room.players)
+          .filter(([, player]) => player) // Ensure player object exists
+          .map(([seat, player]) => [seat, player.hand.length])
+  );
+
   Object.values(room.players).forEach(player => {
     if (!player?.isConnected) return;
 
@@ -128,6 +160,7 @@ function _notifyPlayersRoundStart(room, io, opener) {
       yourHand: player.hand,
       startingSeat: opener,
       scores: room.scores,
+      handSizes: handSizes, // FIXED: Added the missing handSizes object
     });
   });
 }
@@ -139,6 +172,7 @@ module.exports = {
   // Core game functions
   placeTile,
   initNewRound,
+  emitBroadcastMove, // NEWLY EXPORTED
 
   // Simple helpers that can be useful elsewhere
   nextSeat: (seat) => GC.SEAT_ORDER[(GC.SEAT_ORDER.indexOf(seat) + 1) % 4],

@@ -1,46 +1,82 @@
-<!-- =====================================================================
-  DOMINICAN DOMINO  –  CORE GAME GRID
-  -----------------------------------------------------------------------
-  AI NOTES (for hand‑off):
-  • Seat order is counter‑clockwise ➜ 0 (bottom/You), 1 (left),
-    2 (top), 3 (right).  Keep this invariant across JS + CSS.
-  • .player‑area wrappers never receive tiles directly; the inner
-    .hand‑container is where HandRenderer injects .domino‑tile nodes.
-  • #board is the ONLY element BoardRenderer touches.
-  • All sizing / flex‑direction is handled in `main.css`, not here.
-  ==================================================================== -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dominican Domino</title>
+    <link rel="stylesheet" href="css/main.css">
+</head>
 <body>
-  <div id="game-container">
-    
-    <!-- ─────── TOP PLAYER  (Seat 2) ─────── -->
-    <div id="topPlayer" class="player-area vertical" data-seat="2">
-      <!-- HandRenderer will fill #hand2 -->
-      <div id="hand2" class="hand-container"></div>
+
+    <!-- This container will hold either the lobby or the game -->
+    <div id="app-container">
+
+        <!-- Lobby View (Initially hidden) -->
+        <div id="lobbyContainer" style="display: block;">
+            <h2>Game Lobby</h2>
+            <p>Waiting for players to join...</p>
+            <ul id="lobbyList">
+                <!-- Player names will be injected here by LobbyManager -->
+            </ul>
+            <button id="startGameButton" onclick="socket.emit('startGame', { roomId: LobbyManager.currentRoom })" disabled>Start Game</button>
+        </div>
+
+        <!-- Main Game View (Initially hidden) -->
+        <div id="gameView" style="display: none;">
+            <!-- UI Info Panel -->
+            <div id="ui-panel">
+                <h3>Game Info</h3>
+                <p id="playerInfo">You are Seat X (Team X)</p>
+                <p><strong>Status:</strong> <span id="status">Connecting...</span></p>
+                <div id="scores">
+                    <strong>Team 1:</strong> <span id="team0-score">0</span><br>
+                    <strong>Team 2:</strong> <span id="team1-score">0</span>
+                </div>
+                <div id="errors" class="error-box"></div>
+                <h4>Game Log</h4>
+                <div id="messages" class="message-log">
+                    <!-- Game messages will appear here -->
+                </div>
+            </div>
+
+            <!-- Main Game Area -->
+            <div id="game-container">
+                <!-- Top Player (Seat 2) -->
+                <div id="topPlayer" class="player-area vertical" data-seat="2">
+                    <div id="hand2" class="hand-container"></div>
+                </div>
+                <div id="middle-row">
+                    <!-- Left Player (Seat 1) -->
+                    <div id="leftPlayer" class="player-area horizontal" data-seat="1">
+                        <div id="hand1" class="hand-container"></div>
+                    </div>
+                    <!-- Game Board -->
+                    <div id="board" class="board-container"></div>
+                    <!-- Right Player (Seat 3) -->
+                    <div id="rightPlayer" class="player-area horizontal" data-seat="3">
+                        <div id="hand3" class="hand-container"></div>
+                    </div>
+                </div>
+                <!-- Bottom Player (You - Seat 0) -->
+                <div id="bottomPlayer" class="player-area vertical" data-seat="0">
+                    <div id="hand0" class="hand-container"></div>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <!-- ─────── MIDDLE ROW: Left – Board – Right ─────── -->
-    <div id="middle-row">
-      
-      <!-- LEFT PLAYER  (Seat 1) -->
-      <div id="leftPlayer" class="player-area horizontal" data-seat="1">
-        <div id="hand1" class="hand-container"></div>
-      </div>
-
-      <!-- GAME BOARD  (BoardRenderer lives here) -->
-      <div id="board" class="board-container">
-        <!-- Dominoes & drop‑zones are injected dynamically -->
-      </div>
-
-      <!-- RIGHT PLAYER  (Seat 3) -->
-      <div id="rightPlayer" class="player-area horizontal" data-seat="3">
-        <div id="hand3" class="hand-container"></div>
-      </div>
-    </div><!-- /middle‑row -->
-
-    <!-- ─────── BOTTOM PLAYER  (Seat 0 – YOU) ─────── -->
-    <div id="bottomPlayer" class="player-area vertical" data-seat="0">
-      <div id="hand0" class="hand-container"></div>
-    </div>
-
-  </div><!-- /game‑container -->
+    <!-- Load Scripts (ensure correct order) -->
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="shared/constants/gameConstants.js"></script>
+    <script src="shared/utils/dominoUtils.js"></script>
+    <script src="src/game/gameState.js"></script>
+    <script src="src/ui/uiManager.js"></script>
+    <script src="src/ui/boardRenderer.js"></script>
+    <script src="src/ui/handRenderer.js"></script>
+    <script src="src/game/dragDropManager.js"></script>
+    <script src="src/lobby/lobbyManager.js"></script>
+    <script src="src/game/gameManager.js"></script>
+    <script src="src/lobby/connectionManager.js"></script>
+    <script src="client.js"></script>
 </body>
+</html>
