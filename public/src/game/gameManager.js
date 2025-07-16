@@ -1,23 +1,19 @@
 /* =====================================================================
- * src/game/gameManager.js — PERFECT Game Manager
+ * src/game/gameManager.js — Dominican Domino Game Manager
  *
- * FEATURES:
- * - Clean socket event handling
- * - Non-blocking auto-pass
- * - Proper timer cleanup
- * - Reliable state management
- * - Complete error handling
+ * IMPLEMENTS DOMINICAN RULES ON CLIENT:
+ * - Counter-clockwise turn order display
+ * - Proper hand rendering after round start
+ * - Dominican-specific messaging
+ * - Fixed auto-pass logic for Dominican rules
  * =================================================================== */
 
 const GameManager = {
   autoPassTimer: null,
+  gameRules: 'dominican', // Set to Dominican rules
 
-  /**
-   * AI NOTE: Initializes the module by setting up listeners for all game-related
-   * socket events. This acts as the central hub for the client's game logic.
-   */
   init() {
-    console.log('GameManager: Initializing');
+    console.log('GameManager: Initializing Dominican Domino client');
 
     if (!window.socket) {
       console.error('GameManager: Socket not available');
@@ -26,11 +22,6 @@ const GameManager = {
     this.setupSocketListeners();
   },
 
-  /**
-   * AI NOTE: Dynamically sets up listeners for a predefined list of events.
-   * This is a clean pattern that avoids having a long, repetitive list of
-   * `socket.on(...)` calls.
-   */
   setupSocketListeners() {
     const events = [
       'roundStart', 'updateHand', 'broadcastMove', 'turnChanged',
@@ -46,185 +37,307 @@ const GameManager = {
   },
 
   /**
-   * AI NOTE: Handles the start of a new round. It resets all local state,
-   * updates the UI to show the game board, and renders the initial hands.
+   * Handle round start with Dominican rules
    */
   handleRoundStart(data) {
-    console.log('GameManager: Round starting', data);
+    console.log('GameManager: Dominican round starting', data);
+    
+    // Clear any existing timers
     this.clearAutoPassTimer();
 
+    // Hide lobby and show game
     if (UIManager.showLobby) {
       UIManager.showLobby(false);
     }
 
+    // Reset and update game state
     GameState.reset();
     GameState.isGameActive = true;
-    GameState.updateMyHand(data.yourHand);
+    GameState.gameRules = 'dominican';
+    
+    // CRITICAL: Update hand before rendering
+    if (data.yourHand && data.yourHand.length > 0) {
+      GameState.updateMyHand(data.yourHand);
+      console.log(`GameManager: Received hand with ${data.yourHand.length} tiles:`, data.yourHand);
+    } else {
+      console.error('GameManager: No hand received in roundStart!');
+    }
+    
+    // Update game state
     GameState.setCurrentTurn(data.startingSeat);
     GameState.updateScores(data.scores);
-
-    this.updateHandSizes(data.handSizes, data.yourHand.length);
+    
+    // Update hand sizes
+    if (data.handSizes) {
+      GameState.syncHandSizes(data.handSizes);
+    }
+    
+    // Clear messages and update displays
     this.clearMessages();
     this.updateAllDisplays();
-    this.setInitialStatus(data.startingSeat);
-
-    UIManager.addMessage('New round started!');
+    
+    // Set initial status
+    this.setInitialDominicanStatus(data.startingSeat, data.isFirstRound);
+    
+    // Add Dominican-specific message
+    const gameMessage = data.isFirstRound ? 
+      'New Dominican game started! First round: Must play [6|6]' : 
+      'New round started! Winner opens with any tile';
+    UIManager.addMessage(gameMessage);
+    
+    console.log('GameManager: Dominican round initialized successfully');
   },
 
-  /**
-   * AI NOTE: Handles the server sending an updated hand for the player.
-   * This is typically used after a move is made or if a correction is needed.
-   */
   handleUpdateHand(newHand) {
-    console.log('GameManager: Hand updated');
+    console.log('GameManager: Hand updated', newHand);
     GameState.updateMyHand(newHand);
     this.updateHandDisplays();
   },
 
-  /**
-   * AI NOTE: Handles a move made by any player. It updates the board state
-   * and the hand sizes of opponents.
-   */
   handleBroadcastMove(data) {
-    console.log('GameManager: Move broadcast', data);
-    GameState.updateBoard(data.boardState); // Corrected to use boardState
-
-    if (data.seat >= 0 && data.seat !== GameState.mySeat) {
-        GameState.syncHandSizes(data.handSizes);
+    console.log('GameManager: Dominican move broadcast', data);
+    
+    // Update board state
+    GameState.updateBoard(data.boardState);
+    
+    // Update hand sizes
+    if (data.handSizes && data.seat !== GameState.mySeat) {
+      GameState.syncHandSizes(data.handSizes);
     }
-
+    
+    // Update displays
     this.updateAllDisplays();
-    this.addMoveMessage(data);
+    
+    // Add move message
+    this.addDominicanMoveMessage(data);
   },
 
-  /**
-   * AI NOTE: Central logic for when the turn changes. It clears any pending
-   * auto-pass timers and determines if it's now the local player's turn.
-   */
   handleTurnChanged(turn) {
-    console.log('GameManager: Turn changed to', turn);
+    console.log('GameManager: Dominican turn changed to', turn);
+    
     this.clearAutoPassTimer();
     GameState.setCurrentTurn(turn);
 
     if (GameState.isMyTurn()) {
-      this.handleMyTurn();
+      this.handleMyDominicanTurn();
     } else {
       this.handleOtherPlayerTurn(turn);
     }
 
-    // A single call to renderAll() will handle highlighting the current player.
+    // Update hand display to show current player
     this.updateHandDisplays();
   },
 
-  /**
-   * AI NOTE: Logic for when it becomes the local player's turn. It updates
-   * the status message and schedules a check to see if the player has any
-   * valid moves.
-   */
-  handleMyTurn() {
-    UIManager.setStatus('Your turn!');
+  handleMyDominicanTurn() {
+    console.log('GameManager: My Dominican turn');
+    
+    // Show basic status
+    UIManager.setStatus('Your turn! 🇩🇴');
+    
+    // Check for valid moves after a short delay
     this.autoPassTimer = setTimeout(() => {
-      this.checkForValidMovesAndAutoPass();
-    }, 800);
+      this.checkDominicanMoves();
+    }, 1000);
   },
 
   handleOtherPlayerTurn(turn) {
     const playerName = this.getPlayerName(turn);
-    UIManager.setStatus(`${playerName}'s turn...`);
+    UIManager.setStatus(`${playerName}'s turn... 🇩🇴`);
   },
 
   /**
-   * AI NOTE: Checks if the player has any playable tiles. If not, it
-   * triggers the auto-pass sequence. This prevents the game from getting stuck.
+   * Check for valid moves in Dominican rules
    */
-  checkForValidMovesAndAutoPass() {
+  checkDominicanMoves() {
     if (!GameState.isMyTurn()) return;
 
-    if (!GameState.hasPlayableTiles()) {
-      this.initiateAutoPass();
+    const hasPlayableTiles = GameState.hasPlayableTiles();
+    
+    if (!hasPlayableTiles) {
+      this.initiateDominicanAutoPass();
     } else {
-      this.showPlayableOptions();
+      this.showDominicanPlayableOptions();
     }
   },
 
-  initiateAutoPass() {
-    UIManager.setStatus('🚫 No valid moves - Auto-passing in 3 seconds...');
-    UIManager.addMessage('No valid moves available - you will pass automatically');
+  initiateDominicanAutoPass() {
+    console.log('GameManager: Initiating Dominican auto-pass');
+    
+    UIManager.setStatus('🚫 No valid moves - Auto-passing in 3 seconds... 🇩🇴');
+    UIManager.addMessage('No valid moves available (Dominican rules) - passing automatically');
 
     if (UIManager.showNotification) {
-      UIManager.showNotification('No valid moves! Passing automatically...', 'warning', 3000);
+      UIManager.showNotification('No valid moves! Passing automatically... 🇩🇴', 'warning', 3000);
     }
 
     this.autoPassTimer = setTimeout(() => {
       if (GameState.isMyTurn()) {
-        this.executePass();
+        this.executeDominicanPass();
       }
     }, 3000);
   },
 
-  showPlayableOptions() {
+  showDominicanPlayableOptions() {
     const ends = GameState.getBoardEnds();
+    
     if (ends) {
-      UIManager.setStatus(`Your turn! Play on ${ends.left} or ${ends.right}`);
+      UIManager.setStatus(`Your turn! 🇩🇴 Play on ${ends.left} or ${ends.right}`);
     } else {
-      UIManager.setStatus('Your turn! Play the double-six (6|6)');
+      // First move
+      if (GameState.gameRules === 'dominican') {
+        UIManager.setStatus('Your turn! 🇩🇴 Play the double-six [6|6]');
+      } else {
+        UIManager.setStatus('Your turn! 🇩🇴 Play any tile');
+      }
     }
   },
 
-  executePass() {
+  executeDominicanPass() {
+    console.log('GameManager: Executing Dominican pass');
+    
     window.socket.emit('passPlay', {
       roomId: GameState.roomId,
       seat: GameState.mySeat
     });
-    UIManager.addMessage('You passed (no valid moves)');
+    
+    UIManager.addMessage('You passed (Dominican rules - no drawing) 🇩🇴');
   },
 
   handlePlayerPassed(data) {
     const playerName = this.getPlayerName(data.seat);
-    UIManager.addMessage(`${playerName} passed`);
+    const passMessage = `${playerName} passed 🇩🇴`;
+    
+    if (data.passCount) {
+      UIManager.addMessage(`${passMessage} (${data.passCount}/4 passes)`);
+    } else {
+      UIManager.addMessage(passMessage);
+    }
 
     if (data.seat === GameState.mySeat && UIManager.showNotification) {
-      UIManager.showNotification('You passed your turn', 'info', 1500);
+      UIManager.showNotification('You passed your turn 🇩🇴', 'info', 1500);
     }
   },
 
   handleRoundEnded(data) {
-    console.log('GameManager: Round ended', data);
+    console.log('GameManager: Dominican round ended', data);
+    
     this.clearAutoPassTimer();
-
+    
+    // Update game state
     GameState.updateBoard(data.boardState);
     GameState.updateScores(data.scores);
     GameState.syncHandSizes(data.finalHandSizes);
-
+    
+    // Update displays
     this.updateAllDisplays();
-    this.showRoundResults(data);
+    
+    // Show Dominican-specific results
+    this.showDominicanRoundResults(data);
   },
 
   handleGameOver(data) {
-    console.log('GameManager: Game over', data);
+    console.log('GameManager: Dominican game over', data);
+    
     this.clearAutoPassTimer();
     this.clearSession();
-    this.showGameOverResults(data);
+    this.showDominicanGameOverResults(data);
   },
 
   handleErrorMessage(errorMessage) {
     console.error('GameManager: Error received:', errorMessage);
     if (UIManager.showError) {
-      UIManager.showError(errorMessage);
+      UIManager.showError(`🇩🇴 ${errorMessage}`);
     }
   },
 
-  /* ----------------- UTILITIES ----------------- */
+  /* ----------------- DOMINICAN-SPECIFIC UTILITIES ----------------- */
+
+  setInitialDominicanStatus(startingSeat, isFirstRound) {
+    if (GameState.isMyTurn()) {
+      if (isFirstRound) {
+        UIManager.setStatus('Your turn! 🇩🇴 Play the double-six [6|6]');
+      } else {
+        UIManager.setStatus('Your turn! 🇩🇴 Play any tile');
+      }
+      
+      // Check for moves after a delay
+      this.autoPassTimer = setTimeout(() => {
+        this.checkDominicanMoves();
+      }, 1000);
+    } else {
+      const playerName = this.getPlayerName(startingSeat);
+      UIManager.setStatus(`Waiting for ${playerName} to start... 🇩🇴`);
+    }
+  },
+
+  addDominicanMoveMessage(data) {
+    if (data.seat >= 0 && data.tile) {
+      const playerName = this.getPlayerName(data.seat);
+      const tile = `[${data.tile[0]}|${data.tile[1]}]`;
+      UIManager.addMessage(`${playerName} played ${tile} 🇩🇴`);
+    }
+  },
+
+  showDominicanRoundResults(data) {
+    const winnerName = this.getPlayerName(data.winner);
+    const winnerTeam = data.winner % 2;
+    
+    let message = `🏆 ${winnerName} wins the round! 🇩🇴`;
+    
+    // Add reason-specific messaging
+    switch (data.reason) {
+      case 'capicu':
+        message += ' (Capicú!)';
+        break;
+      case 'paso':
+        message += ' (Paso!)';
+        break;
+      case 'capicu_paso':
+        message += ' (Capicú + Paso!)';
+        break;
+      case 'tranca':
+        message += ' (Tranca - blocked board)';
+        break;
+    }
+    
+    const scoreMessage = `+${data.points} points to Team ${winnerTeam + 1}`;
+    const totalMessage = `Scores: Team 1: ${data.scores[0]}, Team 2: ${data.scores[1]}`;
+    
+    UIManager.setStatus(message);
+    UIManager.addMessage(message);
+    UIManager.addMessage(scoreMessage);
+    UIManager.addMessage(totalMessage);
+    
+    // Show details if available
+    if (data.details && data.details.length > 0) {
+      data.details.forEach(detail => UIManager.addMessage(`  ${detail}`));
+    }
+  },
+
+  showDominicanGameOverResults(data) {
+    const message = `🎉 DOMINICAN DOMINO GAME OVER! 🇩🇴 Team ${data.winningTeam + 1} wins!`;
+    
+    UIManager.setStatus(message);
+    UIManager.addMessage(message);
+    UIManager.addMessage(`Final Scores - Team 1: ${data.scores[0]}, Team 2: ${data.scores[1]}`);
+
+    setTimeout(() => {
+      const newGame = confirm(
+        `🇩🇴 DOMINICAN DOMINO GAME OVER! 🇩🇴\n\n${message}\n\nFinal Scores:\nTeam 1: ${data.scores[0]}\nTeam 2: ${data.scores[1]}\n\nStart a new Dominican game?`
+      );
+      if (newGame) {
+        location.reload();
+      }
+    }, 2000);
+  },
+
+  /* ----------------- STANDARD UTILITIES ----------------- */
 
   clearAutoPassTimer() {
     if (this.autoPassTimer) {
       clearTimeout(this.autoPassTimer);
       this.autoPassTimer = null;
     }
-  },
-
-  updateHandSizes(serverHandSizes, myHandSize) {
-    GameState.syncHandSizes(serverHandSizes);
   },
 
   clearMessages() {
@@ -235,76 +348,32 @@ const GameManager = {
   },
 
   updateAllDisplays() {
-    if (BoardRenderer.render) {
-      BoardRenderer.render();
+    // Update board
+    if (window.BoardRenderer && window.BoardRenderer.render) {
+      window.BoardRenderer.render();
     }
+    
+    // Update hands
     this.updateHandDisplays();
+    
+    // Update scores
     if (UIManager.updateScores) {
       UIManager.updateScores(GameState.scores);
     }
   },
 
   updateHandDisplays() {
-    if (HandRenderer.renderAll) {
-      HandRenderer.renderAll();
-    }
-  },
-
-  setInitialStatus(startingSeat) {
-    if (GameState.isMyTurn()) {
-      UIManager.setStatus('Your turn! Play the double-six (6|6)');
-      this.autoPassTimer = setTimeout(() => {
-        this.checkForValidMovesAndAutoPass();
-      }, 800);
-    } else {
-      const playerName = this.getPlayerName(startingSeat);
-      UIManager.setStatus(`Waiting for ${playerName} to play...`);
-    }
-  },
-
-  addMoveMessage(data) {
-    if (data.seat >= 0 && data.tile) {
-      const playerName = this.getPlayerName(data.seat);
-      UIManager.addMessage(`${playerName} played ${data.tile[0]}|${data.tile[1]}`);
+    if (window.HandRenderer && window.HandRenderer.renderAll) {
+      window.HandRenderer.renderAll();
     }
   },
 
   getPlayerName(seat) {
-    if (LobbyManager && LobbyManager.players) {
-      const player = LobbyManager.players.find(p => p && p.seat === seat);
+    if (window.LobbyManager && window.LobbyManager.players) {
+      const player = window.LobbyManager.players.find(p => p && p.seat === seat);
       return player ? player.name : `Seat ${seat}`;
     }
     return `Seat ${seat}`;
-  },
-
-  showRoundResults(data) {
-    const winnerName = this.getPlayerName(data.winner);
-    const winnerTeam = data.winner % 2;
-
-    const message = `🏆 ${winnerName} wins the round! (${data.reason})`;
-    const scoreMessage = `+${data.points} points to Team ${winnerTeam + 1}`;
-    const totalMessage = `Scores: Team 1: ${data.scores[0]}, Team 2: ${data.scores[1]}`;
-
-    UIManager.setStatus(message);
-    UIManager.addMessage(message);
-    UIManager.addMessage(scoreMessage);
-    UIManager.addMessage(totalMessage);
-  },
-
-  showGameOverResults(data) {
-    const message = `🎉 GAME OVER! Team ${data.winningTeam + 1} wins!`;
-    UIManager.setStatus(message);
-    UIManager.addMessage(message);
-    UIManager.addMessage(`Final Scores - Team 1: ${data.scores[0]}, Team 2: ${data.scores[1]}`);
-
-    setTimeout(() => {
-      const newGame = confirm(
-        `${message}\n\nFinal Scores:\nTeam 1: ${data.scores[0]}\nTeam 2: ${data.scores[1]}\n\nStart a new game?`
-      );
-      if (newGame) {
-        location.reload();
-      }
-    }, 1500);
   },
 
   clearSession() {
@@ -318,6 +387,7 @@ const GameManager = {
 
   getGameStatus() {
     return {
+      gameRules: this.gameRules,
       isGameActive: GameState.isGameActive,
       currentTurn: GameState.currentTurn,
       isMyTurn: GameState.isMyTurn(),

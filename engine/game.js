@@ -1,98 +1,177 @@
 /* =====================================================================
- * engine/game.js - Core domino rules & helpers (mode-agnostic foundation)
+ * engine/game.js - Dominican Domino Game Engine
  *
- * REFACTORED to use shared constants and utilities.
+ * IMPLEMENTS PROPER DOMINICAN RULES:
+ * - Counter-clockwise turn order
+ * - First round must start with [6|6]
+ * - Subsequent rounds winner opens with any tile
+ * - Capicú, Paso, and right-hand block bonuses
+ * - Proper tranca (blocked board) detection
  * =================================================================== */
 
-// Note: Ensure this relative path is correct for your project structure.
 const { dealHands } = require('./utils');
-const GC = require('../shared/constants/gameConstants'); // GameConstants
-const DU = require('../shared/utils/dominoUtils');      // DominoUtils
+const GC = require('../shared/constants/gameConstants');
+const DU = require('../shared/utils/dominoUtils');
 
 /* ────────────────────────────────────────────────────────────────────────
  * Core Game Functions
  * ────────────────────────────────────────────────────────────────────── */
 
 /**
- * Validates and places a tile on the board.
- * Flips the tile if necessary and updates the board's exposed ends.
- * @returns {boolean} - True if the placement was successful.
+ * Validates and places a tile on the board following Dominican rules
  */
 function placeTile(room, tile, sideHint) {
-  // On the first move, the board is seeded directly.
+  console.log(`[Dominican Engine] Player ${room.turn} attempting to place [${tile}] on ${sideHint}`);
+  
+  // First move validation
   if (room.board.length === 0) {
-    if (!DU.sameTile(tile, GC.FIRST_TILE)) return false; // Must start with the designated tile
-    room.board.push([...tile]); // Use a copy
+    // First round: Must be [6|6]
+    if (room.isFirstRound && !DU.sameTile(tile, GC.FIRST_TILE)) {
+      console.log(`[Dominican Engine] First round requires [${GC.FIRST_TILE}], got [${tile}]`);
+      return false;
+    }
+    
+    // Subsequent rounds: Winner can play any tile
+    room.board.push([...tile]);
     room.leftEnd = tile[0];
     room.rightEnd = tile[1];
+    room.lastPlayedTile = tile;
+    room.lastPlayedSeat = room.turn;
+    
+    console.log(`[Dominican Engine] Opening tile [${tile}] placed`);
     return true;
   }
 
+  // Regular move validation
   const playableSides = DU.playableSides(tile, room.board);
   if (playableSides.length === 0) {
-    return false; // Not a legal move
-  }
-
-  // If a side is specified, use it. Otherwise, auto-pick if there's only one option.
-  const side = sideHint || (playableSides.length === 1 ? playableSides[0] : null);
-  if (!side) {
-    // This case should be handled by the client prompting the user.
-    // Server should ideally receive an explicit side when ambiguous.
-    console.warn(`[Game Engine] Ambiguous play received for tile [${tile}] without a side hint. Rejecting move.`);
+    console.log(`[Dominican Engine] Tile [${tile}] not playable on current board`);
     return false;
   }
 
+  // Determine side
+  const side = sideHint || (playableSides.length === 1 ? playableSides[0] : null);
+  if (!side) {
+    console.warn(`[Dominican Engine] Ambiguous play for tile [${tile}] without side hint`);
+    return false;
+  }
+
+  // Place tile
   const valueToMatch = (side === 'left') ? room.leftEnd : room.rightEnd;
   const finalTile = _orientTile(tile, valueToMatch, side);
 
   if (side === 'left') {
     room.board.unshift(finalTile);
     room.leftEnd = finalTile[0];
-  } else { // side === 'right'
+  } else {
     room.board.push(finalTile);
     room.rightEnd = finalTile[1];
   }
 
+  room.lastPlayedTile = tile;
+  room.lastPlayedSeat = room.turn;
+  room.passCount = 0; // Reset pass count on successful play
+  
+  console.log(`[Dominican Engine] Tile [${tile}] placed on ${side}, board now: ${room.board.length} tiles`);
   return true;
 }
 
-
 /**
- * Resets the board state, deals new hands, finds the opening player,
- * and notifies all players that a new round has begun.
+ * Initialize a new round following Dominican rules
  */
 function initNewRound(room, io) {
+  console.log(`[Dominican Engine] Starting new round for room ${room.id}`);
+  
   _resetRoundState(room);
-  dealHands(room); // Assumes dealHands populates room.players[seat].hand
-
+  dealHands(room);
+  
+  // Determine opener
   const opener = _determineOpener(room);
   room.turn = opener;
   room.turnStarter = opener;
-
+  
+  console.log(`[Dominican Engine] Round opener: Seat ${opener}`);
+  
   _notifyPlayersRoundStart(room, io, opener);
   io.in(room.id).emit('turnChanged', opener);
 }
 
 /**
- * AI NOTE: This new function centralizes the broadcasting of a move.
- * It constructs the full payload, including the new `boardState` key and
- * the `handSizes` object, that the client-side GameManager expects.
+ * Handle player pass - Dominican rules: no drawing, just pass
  */
-function emitBroadcastMove(io, room, seat, tile) {
-    const handSizes = Object.fromEntries(
-      Object.entries(room.players)
-            .filter(([, player]) => player)
-            .map(([s, p]) => [s, p.hand.length])
-    );
-
-    io.in(room.id).emit('broadcastMove', {
-      seat,                   // who made the move
-      tile,                   // the tile played
-      boardState: room.board,     // NEW key name
-      handSizes                   // NEW – keeps counts in sync
-    });
+function handlePass(room, seat) {
+  console.log(`[Dominican Engine] Player ${seat} passed`);
+  
+  room.passCount++;
+  room.lastPassSeat = seat;
+  
+  // Check for tranca (blocked board)
+  if (room.passCount >= 4) {
+    console.log(`[Dominican Engine] Tranca detected - all players passed`);
+    return { tranca: true };
+  }
+  
+  return { tranca: false };
 }
 
+/**
+ * Check if round is over and calculate scoring
+ */
+function checkRoundEnd(room) {
+  const currentPlayer = room.players[room.turn];
+  
+  // Check if current player emptied their hand
+  if (currentPlayer && currentPlayer.hand.length === 0) {
+    console.log(`[Dominican Engine] Player ${room.turn} emptied their hand`);
+    
+    const scoring = _calculateDominoScoring(room);
+    return {
+      ended: true,
+      reason: scoring.reason,
+      winner: room.turn,
+      points: scoring.points,
+      details: scoring.details
+    };
+  }
+  
+  // Check for tranca
+  if (room.passCount >= 4) {
+    console.log(`[Dominican Engine] Tranca - blocked board`);
+    
+    const scoring = _calculateTrancaScoring(room);
+    return {
+      ended: true,
+      reason: GC.END_REASONS.TRANCA,
+      winner: scoring.winner,
+      points: scoring.points,
+      details: scoring.details
+    };
+  }
+  
+  return { ended: false };
+}
+
+/**
+ * Broadcast move to all players
+ */
+function emitBroadcastMove(io, room, seat, tile) {
+  const handSizes = Object.fromEntries(
+    Object.entries(room.players)
+      .filter(([, player]) => player)
+      .map(([s, p]) => [s, p.hand.length])
+  );
+
+  console.log(`[Dominican Engine] Broadcasting move: Player ${seat} played [${tile}]`);
+
+  io.in(room.id).emit('broadcastMove', {
+    seat,
+    tile,
+    boardState: room.board,
+    handSizes,
+    leftEnd: room.leftEnd,
+    rightEnd: room.rightEnd
+  });
+}
 
 /* ────────────────────────────────────────────────────────────────────────
  * Private Helper Functions
@@ -105,76 +184,192 @@ function _resetRoundState(room) {
     rightEnd: null,
     turn: null,
     turnStarter: null,
-    lastMoverSeat: null,
+    lastPlayedTile: null,
+    lastPlayedSeat: null,
+    lastPassSeat: null,
     passCount: 0,
     isRoundOver: false,
   });
 }
 
-/** Flips a tile if needed to ensure its connecting value is on the correct edge. */
 function _orientTile(tile, valueToMatch, side) {
-    if (side === 'left') {
-        // For the left side, the matching value must end up on the right of the new tile.
-        return (tile[0] === valueToMatch) ? DU.flipped(tile) : [...tile];
-    } else { // side === 'right'
-        // For the right side, the matching value must end up on the left of the new tile.
-        return (tile[1] === valueToMatch) ? DU.flipped(tile) : [...tile];
-    }
+  if (side === 'left') {
+    return (tile[0] === valueToMatch) ? DU.flipped(tile) : [...tile];
+  } else {
+    return (tile[1] === valueToMatch) ? DU.flipped(tile) : [...tile];
+  }
 }
 
 function _determineOpener(room) {
-  // First round of the entire game is opened by the player with the double-six.
   if (room.isFirstRound) {
+    // First round: Player with [6|6] must open
     room.isFirstRound = false;
-    const openerSeat = _findPlayerWithOpeningTile(room);
-    return openerSeat;
+    return _findPlayerWithOpeningTile(room);
+  } else {
+    // Subsequent rounds: Winner of previous round opens
+    return room.lastWinnerSeat ?? GC.SEAT_ORDER[0];
   }
-  // Subsequent rounds are opened by the winner of the previous round.
-  return room.lastWinnerSeat ?? GC.SEAT_ORDER[0]; // Default to seat 0 if no winner yet
 }
 
 function _findPlayerWithOpeningTile(room) {
-  const openerSeatStr = Object.keys(room.players).find(seat =>
-    room.players[seat]?.hand.some(tile => DU.sameTile(tile, GC.FIRST_TILE))
-  );
-  return openerSeatStr !== undefined ? Number(openerSeatStr) : GC.SEAT_ORDER[0]; // Default to seat 0
+  for (const [seatStr, player] of Object.entries(room.players)) {
+    if (player && player.hand && player.hand.some(tile => DU.sameTile(tile, GC.FIRST_TILE))) {
+      return Number(seatStr);
+    }
+  }
+  return GC.SEAT_ORDER[0]; // Fallback
 }
 
-/**
- * AI NOTE: This function now correctly constructs and includes the `handSizes`
- * object in the 'roundStart' payload, which is required by the client's
- * GameManager to properly render opponent hand counts.
- */
 function _notifyPlayersRoundStart(room, io, opener) {
-  // Create an object mapping each seat to its hand size.
   const handSizes = Object.fromEntries(
     Object.entries(room.players)
-          .filter(([, player]) => player) // Ensure player object exists
-          .map(([seat, player]) => [seat, player.hand.length])
+      .filter(([, player]) => player)
+      .map(([seat, player]) => [seat, player.hand ? player.hand.length : 0])
   );
 
   Object.values(room.players).forEach(player => {
-    if (!player?.isConnected) return;
-
-    io.to(player.socketId).emit('roundStart', {
-      yourHand: player.hand,
-      startingSeat: opener,
-      scores: room.scores,
-      handSizes: handSizes, // FIXED: Added the missing handSizes object
-    });
+    if (player && player.isConnected && player.hand) {
+      io.to(player.socketId).emit('roundStart', {
+        yourHand: player.hand,
+        startingSeat: opener,
+        scores: room.scores,
+        handSizes: handSizes,
+        isFirstRound: room.isFirstRound,
+        gameRules: 'dominican'
+      });
+    }
   });
+}
+
+/**
+ * Calculate scoring when a player empties their hand (domino)
+ */
+function _calculateDominoScoring(room) {
+  const winner = room.turn;
+  const nextPlayer = GC.nextSeat(winner);
+  const lastTile = room.lastPlayedTile;
+  
+  // Calculate total pips in all hands
+  let totalPips = 0;
+  Object.values(room.players).forEach(player => {
+    if (player && player.hand) {
+      totalPips += GC.calculatePips(player.hand);
+    }
+  });
+  
+  let bonus = 0;
+  let reason = GC.END_REASONS.DOMINO;
+  let details = [];
+  
+  // Check for Capicú (last tile connects both ends)
+  if (_isCapicu(room, lastTile)) {
+    bonus += GC.SCORING.CAPICU;
+    details.push('Capicú (+30)');
+  }
+  
+  // Check for Paso (no one can respond)
+  if (_isPaso(room, winner)) {
+    bonus += GC.SCORING.PASO;
+    details.push('Paso (+30)');
+  }
+  
+  // Update reason based on bonuses
+  if (bonus === GC.SCORING.CAPICU) {
+    reason = GC.END_REASONS.CAPICU;
+  } else if (bonus === GC.SCORING.PASO) {
+    reason = GC.END_REASONS.PASO;
+  } else if (bonus === GC.SCORING.CAPICU_PASO) {
+    reason = GC.END_REASONS.CAPICU_PASO;
+  }
+  
+  const totalPoints = totalPips + bonus;
+  
+  return {
+    reason,
+    points: totalPoints,
+    details: details.concat([`Pips: ${totalPips}`, `Bonus: ${bonus}`, `Total: ${totalPoints}`])
+  };
+}
+
+/**
+ * Calculate scoring for tranca (blocked board)
+ */
+function _calculateTrancaScoring(room) {
+  const lastPlayer = room.lastPlayedSeat;
+  const nextPlayer = GC.nextSeat(lastPlayer);
+  
+  // Calculate pip totals for each player
+  const pipTotals = {};
+  Object.values(room.players).forEach(player => {
+    if (player && player.hand) {
+      pipTotals[player.seat] = GC.calculatePips(player.hand);
+    }
+  });
+  
+  const lastPlayerPips = pipTotals[lastPlayer] || 0;
+  const nextPlayerPips = pipTotals[nextPlayer] || 0;
+  
+  // Winner is the one with fewer pips
+  const winner = lastPlayerPips <= nextPlayerPips ? lastPlayer : nextPlayer;
+  
+  // Points = sum of all pips
+  const totalPips = Object.values(pipTotals).reduce((sum, pips) => sum + pips, 0);
+  
+  return {
+    winner,
+    points: totalPips,
+    details: [
+      `Tranca: ${lastPlayer} (${lastPlayerPips}) vs ${nextPlayer} (${nextPlayerPips})`,
+      `Winner: ${winner}`,
+      `Total pips: ${totalPips}`
+    ]
+  };
+}
+
+/**
+ * Check if last play was Capicú (connects both ends)
+ */
+function _isCapicu(room, tile) {
+  if (room.board.length < 2) return false;
+  
+  const leftEnd = room.leftEnd;
+  const rightEnd = room.rightEnd;
+  
+  // Capicú: last tile connects both ends and ends were different
+  return leftEnd !== rightEnd && tile.includes(leftEnd) && tile.includes(rightEnd);
+}
+
+/**
+ * Check if last play was Paso (no one can respond)
+ */
+function _isPaso(room, winner) {
+  const leftEnd = room.leftEnd;
+  const rightEnd = room.rightEnd;
+  
+  // Check if any other player can play
+  for (const [seat, player] of Object.entries(room.players)) {
+    if (Number(seat) !== winner && player && player.hand) {
+      const canPlay = player.hand.some(tile => 
+        tile.includes(leftEnd) || tile.includes(rightEnd)
+      );
+      if (canPlay) return false;
+    }
+  }
+  
+  return true;
 }
 
 /* ────────────────────────────────────────────────────────────────────────
  * Exports
  * ────────────────────────────────────────────────────────────────────── */
 module.exports = {
-  // Core game functions
   placeTile,
   initNewRound,
-  emitBroadcastMove, // NEWLY EXPORTED
-
-  // Simple helpers that can be useful elsewhere
-  nextSeat: (seat) => GC.SEAT_ORDER[(GC.SEAT_ORDER.indexOf(seat) + 1) % 4],
-  teamOf: (seat) => seat % 2,
+  handlePass,
+  checkRoundEnd,
+  emitBroadcastMove,
+  
+  // Dominican turn order helper
+  nextSeat: GC.nextSeat,
+  teamOf: GC.TEAM_OF_SEAT,
 };

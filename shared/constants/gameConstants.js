@@ -1,16 +1,11 @@
 /* =====================================================================
- * shared/constants/gameConstants.js
+ * shared/constants/gameConstants.js - Dominican Domino Rules
  *
- * AI NOTES ‑ WHY THIS EXISTS
- * ---------------------------------------------------------------------
- * • “One source of truth” for numbers / strings that are referenced by
- *   *both* the browser code and the Node.js server (room logic, tests…).
- * • Absolutely **no** live logic here – just frozen data.
- * • Written in a tiny UMD wrapper so you can:
- *       const { DOMINO_SET } = require('./gameConstants');
- *   or in the browser:
- *       <script src="/shared/constants/gameConstants.js"></script>
- *       console.log(window.GameConstants.DOMINO_SET);
+ * FIXED FOR DOMINICAN RULES:
+ * - Counter-clockwise turn order
+ * - Proper scoring system
+ * - Capicú and Paso bonuses
+ * - Right-hand block bonuses
  * =================================================================== */
 
 (function (root, factory) {
@@ -19,7 +14,7 @@
     // Node / CommonJS
     module.exports = factory();
   } else {
-    // Browser – expose on window
+    // Browser – expose on window
     root.GameConstants = factory();
   }
 })(typeof self !== 'undefined' ? self : this, () => {
@@ -40,28 +35,61 @@
   })();
 
   /* ----------------------------------------------------------------- */
-  /* TABLE / SEATING -------------------------------------------------- */
+  /* TABLE / SEATING - DOMINICAN COUNTER-CLOCKWISE ORDER ------------- */
   /* ----------------------------------------------------------------- */
   /** Seat indexes (counter‑clockwise from your perspective) */
   const SEATS = Object.freeze({
     SOUTH: 0, // you
-    EAST:  1, // player to your left
+    WEST:  3, // player to your right (next in turn order)
     NORTH: 2, // opposite you
-    WEST:  3  // player to your right
+    EAST:  1  // player to your left
   });
 
-  /** Handy list for loops → [0,1,2,3] */
-  const SEAT_ORDER = Object.freeze(Object.values(SEATS));
+  /** DOMINICAN TURN ORDER: Counter-clockwise [0,3,2,1] */
+  const SEAT_ORDER = Object.freeze([0, 3, 2, 1]);
 
   /** Every seat belongs to team 0 or 1 (partners are 2 apart). */
-  const TEAM_OF_SEAT = (seat) => seat % 2;          // 0 → team‑0, 1 → team‑1…
+  const TEAM_OF_SEAT = (seat) => seat % 2;          // 0,2 → team‑0; 1,3 → team‑1
 
   /* ----------------------------------------------------------------- */
   /* GAME FLOW -------------------------------------------------------- */
   /* ----------------------------------------------------------------- */
-  const FIRST_TILE = Object.freeze([6, 6]);         // Double‑six must start
+  const FIRST_TILE = Object.freeze([6, 6]);         // Double‑six must start first round
   const HAND_SIZE  = 7;                             // Classic 4‑player dominoes
   const WINNING_SCORE = 100;                        // Points cap
+
+  /* ----------------------------------------------------------------- */
+  /* DOMINICAN SCORING SYSTEM ---------------------------------------- */
+  /* ----------------------------------------------------------------- */
+  const SCORING = Object.freeze({
+    CAPICU: 30,           // Last tile connects both ends
+    PASO: 30,             // No one can respond after last play
+    CAPICU_PASO: 60,      // Both Capicú and Paso
+    RIGHT_HAND_DOUBLE: 30,    // Next opponent can't play after opening double
+    RIGHT_HAND_MIXED: 60,     // Next opponent can't play after opening mixed tile
+  });
+
+  /* ----------------------------------------------------------------- */
+  /* GAME STATES ------------------------------------------------------ */
+  /* ----------------------------------------------------------------- */
+  const GAME_STATES = Object.freeze({
+    WAITING: 'waiting',
+    ACTIVE: 'active',
+    ROUND_ENDED: 'roundEnded',
+    GAME_OVER: 'gameOver',
+    TRANCA: 'tranca'  // Blocked board
+  });
+
+  /* ----------------------------------------------------------------- */
+  /* ROUND END REASONS ------------------------------------------------ */
+  /* ----------------------------------------------------------------- */
+  const END_REASONS = Object.freeze({
+    DOMINO: 'domino',           // Player emptied their hand
+    TRANCA: 'tranca',           // Blocked board
+    CAPICU: 'capicu',           // Domino with Capicú bonus
+    PASO: 'paso',               // Domino with Paso bonus
+    CAPICU_PASO: 'capicu_paso'  // Domino with both bonuses
+  });
 
   /* Socket / event names (single source) */
   const EVENTS = Object.freeze({
@@ -78,6 +106,33 @@
   });
 
   /* ----------------------------------------------------------------- */
+  /* HELPER FUNCTIONS ------------------------------------------------- */
+  /* ----------------------------------------------------------------- */
+  
+  /** Get next seat in Dominican counter-clockwise order */
+  const nextSeat = (currentSeat) => {
+    const currentIndex = SEAT_ORDER.indexOf(currentSeat);
+    const nextIndex = (currentIndex + 1) % SEAT_ORDER.length;
+    return SEAT_ORDER[nextIndex];
+  };
+
+  /** Get previous seat in Dominican counter-clockwise order */
+  const prevSeat = (currentSeat) => {
+    const currentIndex = SEAT_ORDER.indexOf(currentSeat);
+    const prevIndex = (currentIndex - 1 + SEAT_ORDER.length) % SEAT_ORDER.length;
+    return SEAT_ORDER[prevIndex];
+  };
+
+  /** Check if a tile is a double */
+  const isDouble = (tile) => tile[0] === tile[1];
+
+  /** Calculate pip sum of a hand */
+  const calculatePips = (hand) => {
+    if (!hand || !Array.isArray(hand)) return 0;
+    return hand.reduce((sum, tile) => sum + tile[0] + tile[1], 0);
+  };
+
+  /* ----------------------------------------------------------------- */
   /* PUBLIC API ------------------------------------------------------- */
   /* ----------------------------------------------------------------- */
   return Object.freeze({
@@ -89,6 +144,15 @@
     FIRST_TILE,
     HAND_SIZE,
     WINNING_SCORE,
-    EVENTS
+    SCORING,
+    GAME_STATES,
+    END_REASONS,
+    EVENTS,
+    
+    // Helper functions
+    nextSeat,
+    prevSeat,
+    isDouble,
+    calculatePips
   });
 });
