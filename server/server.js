@@ -198,12 +198,19 @@ io.on('connection', (socket) => {
 
   // Handle Dominican tile play
   socket.on('playTile', ({ roomId, seat, tile, side }) => {
-    console.log(`[Dominican Server] Player ${seat} playing [${tile}] on ${side}`);
+    console.log(`[Dominican Server] Player ${seat} attempting to play [${tile}] on ${side}`);
     
     try {
       const room = gameRooms.get(roomId);
-      if (!room || !room.isGameActive || room.turn !== seat) {
-        socket.emit('errorMessage', 'Not your turn or game not active');
+      if (!room || !room.isGameActive) {
+        socket.emit('errorMessage', 'Game not active');
+        return;
+      }
+
+      // CRITICAL: Verify it's actually this player's turn
+      if (room.turn !== seat) {
+        console.log(`[Dominican Server] Not player ${seat}'s turn (current turn: ${room.turn})`);
+        socket.emit('errorMessage', `Not your turn. Current turn: ${room.turn}`);
         return;
       }
 
@@ -219,14 +226,41 @@ io.on('connection', (socket) => {
       );
       
       if (tileIndex === -1) {
+        console.log(`[Dominican Server] Tile [${tile}] not in player ${seat}'s hand:`, player.hand);
         socket.emit('errorMessage', 'Tile not in your hand');
         return;
+      }
+
+      // FIRST MOVE VALIDATION: First round must be [6|6]
+      if (room.board.length === 0) {
+        console.log(`[Dominican Server] First move validation. Is first round: ${room.isFirstRound}`);
+        
+        if (room.isFirstRound) {
+          if (tile[0] !== 6 || tile[1] !== 6) {
+            console.log(`[Dominican Server] First round requires [6|6], got [${tile}]`);
+            socket.emit('errorMessage', 'First round must start with [6|6]');
+            return;
+          }
+          
+          // CRITICAL: Double-check that this player should actually have [6|6]
+          const actuallyHasDoubleSix = player.hand.some(t => t[0] === 6 && t[1] === 6);
+          if (!actuallyHasDoubleSix) {
+            console.error(`[Dominican Server] CRITICAL ERROR: Player ${seat} trying to play [6|6] but doesn't have it!`);
+            console.error(`[Dominican Server] Player ${seat} hand:`, player.hand);
+            socket.emit('errorMessage', 'Server error: You don\'t actually have [6|6]');
+            return;
+          }
+          
+          console.log(`[Dominican Server] ✓ Valid first move: [6|6] by player ${seat}`);
+        }
       }
 
       // Use Dominican game engine
       if (GameEngine.placeTile(room, tile, side)) {
         // Remove tile from hand
         player.hand.splice(tileIndex, 1);
+        
+        console.log(`[Dominican Server] ✓ Player ${seat} successfully played [${tile}]`);
         
         // Broadcast move
         GameEngine.emitBroadcastMove(io, room, seat, tile);
@@ -332,6 +366,7 @@ function startDominicanGame(room) {
     if (!room.isFull()) return;
 
     console.log(`[Dominican Server] Starting Dominican game in room ${room.id}`);
+    console.log(`[Dominican Server] Is first round: ${room.isFirstRound}`);
     
     room.isGameActive = true;
     room.gameState = GC.GAME_STATES.ACTIVE;
@@ -340,6 +375,7 @@ function startDominicanGame(room) {
     GameEngine.initNewRound(room, io);
     
     console.log(`[Dominican Server] Dominican game started in room ${room.id}`);
+    console.log(`[Dominican Server] Current turn: ${room.turn}`);
 
   } catch (error) {
     console.error('[Dominican Server] Error starting game:', error);

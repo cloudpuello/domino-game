@@ -38,6 +38,12 @@ function placeTile(room, tile, sideHint) {
     room.lastPlayedTile = tile;
     room.lastPlayedSeat = room.turn;
     
+    // IMPORTANT: Only reset first round flag after successful first move
+    if (room.isFirstRound) {
+      room.isFirstRound = false;
+      console.log(`[Dominican Engine] First round flag reset after successful [6|6] placement`);
+    }
+    
     console.log(`[Dominican Engine] Opening tile [${tile}] placed`);
     return true;
   }
@@ -227,16 +233,22 @@ function _notifyPlayersRoundStart(room, io, opener) {
       .map(([seat, player]) => [seat, player.hand ? player.hand.length : 0])
   );
 
+  console.log(`[Dominican Engine] Notifying players of round start. Opener: ${opener}`);
+
   Object.values(room.players).forEach(player => {
     if (player && player.isConnected && player.hand) {
-      io.to(player.socketId).emit('roundStart', {
+      const payload = {
         yourHand: player.hand,
         startingSeat: opener,
         scores: room.scores,
         handSizes: handSizes,
-        isFirstRound: room.isFirstRound,
+        isFirstRound: room.isFirstRound, // Pass the first round flag
         gameRules: 'dominican'
-      });
+      };
+      
+      console.log(`[Dominican Engine] Sending roundStart to ${player.name} (seat ${player.seat}). First round: ${room.isFirstRound}`);
+      
+      io.to(player.socketId).emit('roundStart', payload);
     }
   });
 }

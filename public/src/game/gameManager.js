@@ -37,7 +37,7 @@ const GameManager = {
   },
 
   /**
-   * Enhanced round start for Dominican rules with proper opener detection
+   * Enhanced round start for Dominican rules with validation
    */
   handleRoundStart(data) {
     console.log('GameManager: Dominican round starting', data);
@@ -77,6 +77,11 @@ const GameManager = {
     this.clearMessages();
     this.updateAllDisplays();
     
+    // CRITICAL: Validate first round logic
+    if (data.isFirstRound) {
+      this.validateFirstRoundLogic(data.startingSeat);
+    }
+    
     // Set initial status - NO AUTO-PASS CHECK YET
     this.setInitialDominicanStatus(data.startingSeat, data.isFirstRound);
     
@@ -86,14 +91,39 @@ const GameManager = {
       'New round started! Winner opens with any tile';
     UIManager.addMessage(gameMessage);
     
-    // IMPORTANT: Log who should have the [6|6] in first round
-    if (data.isFirstRound) {
-      const hasDoubleSix = GameState.myHand.some(tile => tile[0] === 6 && tile[1] === 6);
-      console.log(`GameManager: First round - I ${hasDoubleSix ? 'HAVE' : 'DO NOT HAVE'} [6|6]`);
-      console.log(`GameManager: Starting seat is ${data.startingSeat}, my seat is ${GameState.mySeat}`);
-    }
-    
     console.log('GameManager: Dominican round initialized successfully');
+  },
+
+  /**
+   * Validate first round logic - check if the right player was chosen
+   */
+  validateFirstRoundLogic(startingSeat) {
+    console.log('=== FIRST ROUND VALIDATION ===');
+    
+    const myHand = GameState.myHand;
+    const hasDoubleSix = myHand.some(tile => tile[0] === 6 && tile[1] === 6);
+    const mySeat = GameState.mySeat;
+    
+    console.log(`My seat: ${mySeat}`);
+    console.log(`Starting seat: ${startingSeat}`);
+    console.log(`I have [6|6]: ${hasDoubleSix}`);
+    console.log(`My hand:`, myHand);
+    
+    if (hasDoubleSix && startingSeat !== mySeat) {
+      console.error('❌ VALIDATION ERROR: I have [6|6] but server chose someone else to start!');
+      UIManager.addMessage('❌ ERROR: I have [6|6] but it\'s not my turn!');
+      UIManager.showError('Server error: Wrong player chosen to start');
+    } else if (!hasDoubleSix && startingSeat === mySeat) {
+      console.error('❌ VALIDATION ERROR: Server chose me to start but I don\'t have [6|6]!');
+      UIManager.addMessage('❌ ERROR: It\'s my turn but I don\'t have [6|6]!');
+      UIManager.showError('Server error: You don\'t have [6|6] but were chosen to start');
+    } else if (hasDoubleSix && startingSeat === mySeat) {
+      console.log('✅ VALIDATION SUCCESS: I have [6|6] and it\'s my turn');
+      UIManager.addMessage('✅ You have [6|6] and will start the game');
+    } else {
+      console.log('⏳ VALIDATION: I don\'t have [6|6], waiting for correct player');
+      UIManager.addMessage('⏳ Waiting for player with [6|6] to start');
+    }
   },
 
   handleUpdateHand(newHand) {

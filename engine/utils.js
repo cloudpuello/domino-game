@@ -36,12 +36,10 @@ function newDeck() {
 }
 
 /**
- * FIXED: Creates a new shuffled deck and distributes tiles to all connected players in a room.
- * This function modifies the `hand` property of each player object directly.
- * @param {object} room - The game room object containing the players.
+ * FIXED: Creates a new shuffled deck and distributes tiles with validation
  */
 function dealHands(room) {
-  console.log(`[Utils] Starting hand dealing for room ${room.id}`);
+  console.log(`[Utils] Starting Dominican hand dealing for room ${room.id}`);
   
   const players = room?.players;
   if (!players) {
@@ -65,8 +63,19 @@ function dealHands(room) {
     return;
   }
 
-  // Create and shuffle deck
+  // Create and validate deck
   const deck = newDeck();
+  
+  // CRITICAL: Validate deck has exactly one [6|6]
+  const doubleSixTiles = deck.filter(tile => tile[0] === 6 && tile[1] === 6);
+  if (doubleSixTiles.length !== 1) {
+    console.error(`[Utils] CRITICAL ERROR: Deck has ${doubleSixTiles.length} [6|6] tiles, should have exactly 1!`);
+    console.error(`[Utils] Double-six tiles found:`, doubleSixTiles);
+    return;
+  }
+  
+  console.log(`[Utils] ✓ Deck validation passed: Found exactly 1 [6|6] tile`);
+  
   let deckCursor = 0;
 
   // Deal hands to each connected player
@@ -83,7 +92,12 @@ function dealHands(room) {
     deckCursor = handEnd;
 
     console.log(`[Utils] Dealt ${player.hand.length} tiles to ${player.name} (seat ${player.seat})`);
-    console.log(`[Utils] ${player.name}'s hand:`, player.hand);
+    
+    // Check if this player got the [6|6]
+    const hasDoubleSix = player.hand.some(tile => tile[0] === 6 && tile[1] === 6);
+    if (hasDoubleSix) {
+      console.log(`[Utils] ✓ Player ${player.name} (seat ${player.seat}) received [6|6]`);
+    }
     
     // Verify the hand has the expected tiles
     if (player.hand.length !== GC.HAND_SIZE) {
@@ -92,6 +106,21 @@ function dealHands(room) {
   });
 
   console.log(`[Utils] Hand dealing completed. Used ${deckCursor} tiles from deck of ${deck.length}`);
+  
+  // POST-DEAL VALIDATION: Verify exactly one player has [6|6]
+  const playersWithDoubleSix = connectedPlayers.filter(player => 
+    player.hand && player.hand.some(tile => tile[0] === 6 && tile[1] === 6)
+  );
+  
+  if (playersWithDoubleSix.length !== 1) {
+    console.error(`[Utils] CRITICAL ERROR: ${playersWithDoubleSix.length} players have [6|6], should be exactly 1!`);
+    playersWithDoubleSix.forEach(player => {
+      console.error(`[Utils] Player ${player.name} (seat ${player.seat}) has [6|6]`);
+    });
+  } else {
+    const doubleSixPlayer = playersWithDoubleSix[0];
+    console.log(`[Utils] ✓ POST-DEAL VALIDATION: Only ${doubleSixPlayer.name} (seat ${doubleSixPlayer.seat}) has [6|6]`);
+  }
   
   // Verify all players have hands
   Object.values(players).forEach(player => {
