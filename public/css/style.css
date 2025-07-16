@@ -1,735 +1,211 @@
-/* =====================================================================
- * COMPLETE FIXED CSS - Dominican Domino Game
- * 
- * FIXES APPLIED:
- * 1. Fixed side player hand stacking issue COMPLETELY
- * 2. Better domino layouts and spacing
- * 3. Improved visual feedback and animations
- * 4. All original styles preserved and enhanced
- * =================================================================== */
+/* ==========================================================
+   CORE LAYOUT — counter-clockwise 4-hand table
+   ========================================================== */
 
 :root {
-  --primary-green: #1a5f3f;
-  --secondary-green: #2d7a5c;
-  --accent-gold: #d4af37;
-  --accent-light: #f4e677;
-  --table-felt: linear-gradient(135deg, #1a5f3f 0%, #0f3d28 100%);
-  --panel-bg: #ffffff;
-  --card-bg: #f8f9fa;
-  --domino-face: #fefefe;
-  --domino-border: #2a2a2a;
-  --pip-color: #1a1a1a;
-  --text-primary: #2c3e50;
-  --text-secondary: #6c757d;
-  --text-light: #ffffff;
-  --success: #27ae60;
-  --warning: #f39c12;
-  --error: #e74c3c;
-  --info: #3498db;
-  --shadow-sm: 0 2px 4px rgba(0,0,0,0.1);
-  --shadow-md: 0 4px 12px rgba(0,0,0,0.15);
-  --shadow-lg: 0 8px 24px rgba(0,0,0,0.2);
-  --transition-fast: 0.15s ease-out;
-  --transition-normal: 0.25s ease-out;
-  --space-xs: 0.25rem;
-  --space-sm: 0.5rem;
-  --space-md: 1rem;
-  --space-lg: 1.5rem;
-  --space-xl: 2rem;
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 16px;
+  /* Color Palette */
+  --felt-green: #153d29;
+  --accent-gold: #ffd700;
+
+  /* Sizing Variables */
+  --hand-tile-width: 32px;
+  --hand-tile-height: 64px;
+  --board-tile-width: 48px;
+  --board-tile-height: 96px;
 }
 
-/* Reset and Base */
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
-*:focus {
-  outline: 2px solid var(--accent-gold);
-  outline-offset: 2px;
-}
-
-body {
-  font-family: 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif;
-  background: var(--table-felt);
-  color: var(--text-primary);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 100vh;
-  padding: var(--space-md);
-  user-select: none;
-  overflow: hidden;
-}
-
-/* Main Layout */
-.game-container {
+/* 1. Full-screen game canvas */
+#game-container {
+  width: 100vw;
+  height: 100vh;
   display: grid;
-  grid-template-columns: 280px 1fr;
-  gap: var(--space-lg);
-  width: 100%;
-  max-width: 1600px;
-  height: 95vh;
-  max-height: 1000px;
-  filter: drop-shadow(var(--shadow-lg));
-}
-
-/* Info Panel */
-.info-panel {
-  background: var(--panel-bg);
-  border-radius: var(--radius-lg);
-  padding: var(--space-lg);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-lg);
-  box-shadow: var(--shadow-lg);
-  overflow-y: auto;
-  border: 1px solid rgba(255,255,255,0.1);
-}
-
-.info-section {
-  background: var(--card-bg);
-  border-radius: var(--radius-md);
-  padding: var(--space-md);
-  border-left: 4px solid var(--accent-gold);
-}
-
-.info-section h1 {
-  font-size: 1.75rem;
-  font-weight: 600;
-  color: var(--primary-green);
-  margin-bottom: var(--space-sm);
-  text-align: center;
-}
-
-.info-section h3 {
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin-bottom: var(--space-sm);
-}
-
-/* Status and Messages */
-#playerInfo {
-  font-weight: 500;
-  color: var(--text-secondary);
-  text-align: center;
-  padding: var(--space-sm);
-  background: linear-gradient(135deg, #e8f5e8 0%, #f0f8f0 100%);
-  border-radius: var(--radius-sm);
-}
-
-#status {
-  font-weight: 600;
-  font-size: 1.2rem;
-  color: var(--primary-green);
-  text-align: center;
-  padding: var(--space-md);
-  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-  border-radius: var(--radius-md);
-  border: 2px solid var(--accent-gold);
-  box-shadow: var(--shadow-sm);
-}
-
-#errors {
-  color: var(--error);
-  font-weight: 600;
-  text-align: center;
-  padding: var(--space-sm);
-  border-radius: var(--radius-sm);
-  background: rgba(231, 76, 60, 0.1);
-  border: 1px solid rgba(231, 76, 60, 0.3);
-  min-height: 1.5em;
-}
-
-#messages {
-  max-height: 200px;
-  overflow-y: auto;
-  font-size: 0.9rem;
-  background: #f8f9fa;
-  border-radius: var(--radius-sm);
-  padding: var(--space-sm);
-}
-
-/* Score Display */
-.score-display {
-  display: flex;
-  gap: var(--space-md);
-  justify-content: space-between;
-}
-
-.score-box {
-  flex: 1;
-  text-align: center;
-  padding: var(--space-md);
-  border-radius: var(--radius-md);
-  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
-  border: 2px solid #e9ecef;
-  border-bottom: 4px solid;
-  box-shadow: var(--shadow-sm);
-}
-
-.your-team-color {
-  border-bottom-color: var(--success);
-}
-
-.opponent-team-color {
-  border-bottom-color: var(--error);
-}
-
-.score-box span {
-  font-size: 0.85rem;
-  font-weight: 500;
-  color: var(--text-secondary);
-  display: block;
-  margin-bottom: var(--space-xs);
-}
-
-.score-box strong {
-  font-size: 2rem;
-  font-weight: 700;
-  color: var(--text-primary);
-  display: block;
-}
-
-/* Game Table Layout - FIXED LAYOUT */
-.game-table {
-  display: grid;
-  grid-template-columns: 200px 1fr 200px;
-  grid-template-rows: 120px 1fr 160px;
-  grid-template-areas:
-    "top-player top-player top-player"
-    "left-player board right-player"
-    "player-hand player-hand player-hand";
-  gap: var(--space-md);
-  background: var(--table-felt);
-  border-radius: var(--radius-xl);
-  padding: var(--space-lg);
-  box-shadow: inset 0 0 0 3px rgba(255,255,255,0.1);
-}
-
-/* Player Areas - FIXED with proper heights */
-.player-area {
-  color: var(--text-light);
-  padding: var(--space-sm);
-  text-align: center;
-  background: rgba(255,255,255,0.1);
-  border-radius: var(--radius-md);
-  border: 1px solid rgba(255,255,255,0.2);
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
-  align-items: center;
-  font-weight: 500;
-  overflow: hidden;
-}
-
-.player-area .player-name {
-  font-size: 14px;
-  margin-bottom: 10px;
-  font-weight: 600;
-  flex-shrink: 0;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.3);
-}
-
-#topPlayer {
-  grid-area: top-player;
-  height: 120px;
-}
-
-#leftPlayer {
-  grid-area: left-player;
-  height: 100%;
-  min-height: 500px;
-}
-
-#rightPlayer {
-  grid-area: right-player;
-  height: 100%;
-  min-height: 500px;
-}
-
-#bottomPlayer {
-  grid-area: player-hand;
-  background: rgba(76, 175, 80, 0.15);
-  border: 2px solid rgba(76, 175, 80, 0.5);
-  height: 160px;
-}
-
-/* COMPLETELY FIXED: Player Hand Containers */
-.player-hand-container {
+  background: var(--felt-green);
+  gap: 8px;
   padding: 12px;
-  border-radius: 8px;
-  background: rgba(255,255,255,0.1);
-  border: 2px solid transparent;
-  transition: all 0.3s ease;
-  flex: 1;
-  width: 100%;
-  min-height: 80px;
+  box-sizing: border-box;
+
+  grid-template-columns: 160px 1fr 160px;
+  grid-template-rows: 120px 1fr 120px;
+  grid-template-areas:
+    "top-player   top-player   top-player"
+    "left-player  board        right-player"
+    "bottom-player bottom-player bottom-player";
+}
+
+/* 2. Area anchors that map to grid-template-areas */
+#topPlayer { grid-area: top-player; }
+#leftPlayer { grid-area: left-player; }
+#rightPlayer { grid-area: right-player; }
+#bottomPlayer { grid-area: bottom-player; }
+#board { grid-area: board; }
+
+/* ==========================================================
+   PLAYER AREAS & HANDS
+   ========================================================== */
+.player-area {
   display: flex;
+  justify-content: center;
   align-items: center;
-  justify-content: center;
-}
-
-.player-hand-container.current-player {
-  border-color: #ffd700;
-  background: rgba(255,215,0,0.2);
-  box-shadow: 0 0 20px rgba(255,215,0,0.5);
-  animation: currentPlayerGlow 2s ease-in-out infinite;
-}
-
-@keyframes currentPlayerGlow {
-  0%, 100% { 
-    box-shadow: 0 0 20px rgba(255,215,0,0.4); 
-  }
-  50% { 
-    box-shadow: 0 0 30px rgba(255,215,0,0.8); 
-  }
-}
-
-.player-hand-container.my-hand {
-  background: rgba(76, 175, 80, 0.1);
-  border-color: rgba(76, 175, 80, 0.3);
-}
-
-/* TOP PLAYER - Horizontal layout */
-.position-top .player-hand-container {
-  flex-direction: row;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 6px;
-  height: 90px;
-  max-height: 90px;
-  overflow: hidden;
-}
-
-/* BOTTOM PLAYER (YOU) - Horizontal layout */
-.position-bottom .player-hand-container {
-  flex-direction: row;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 6px;
-  height: 120px;
-  max-height: 120px;
-  overflow: hidden;
-}
-
-/* CRITICAL FIX: SIDE PLAYERS - Vertical column layout NO STACKING */
-.position-left .player-hand-container,
-.position-right .player-hand-container {
-  display: flex !important;
-  flex-direction: column !important;
-  justify-content: flex-start !important;
-  align-items: center !important;
-  gap: 20px !important;
-  flex-wrap: nowrap !important;
-  padding: 25px 15px !important;
-  width: 100% !important;
-  height: calc(100% - 50px) !important;
-  max-height: 600px !important;
-  overflow-y: auto !important;
-  overflow-x: hidden !important;
-  box-sizing: border-box !important;
-}
-
-/* DOMINO BASE STYLES */
-.hand-domino {
-  width: 32px;
-  height: 64px;
-  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 50%, #e9ecef 100%);
-  border: 2px solid #333;
+  background: rgba(255, 255, 255, .05);
+  border: 1px solid rgba(0, 0, 0, .2);
   border-radius: 6px;
+}
+
+.hand-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* Orientation helpers based on classes in the HTML */
+.player-area.vertical .hand-container {
+  flex-direction: row;
+  gap: 6px;
+}
+.player-area.horizontal .hand-container {
+  flex-direction: column;
+  gap: 4px; /* Fine-tuned for visual consistency after rotation */
+}
+
+/* ==========================================================
+   DOMINO VISUALS (BEM Style)
+   ========================================================== */
+
+/* Base class for ALL dominoes */
+.domino {
   display: flex;
   flex-direction: column;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 3px 8px rgba(0,0,0,0.2);
-  position: relative;
+  width: var(--hand-tile-width);
+  height: var(--hand-tile-height);
+  background: #fff;
+  border: 1px solid #222;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  transition: all 0.2s ease-in-out;
   flex-shrink: 0;
-  margin: 2px;
 }
 
-/* HORIZONTAL DOMINO LAYOUTS (top and bottom) */
-.position-top .hand-domino,
-.position-bottom .hand-domino {
-  width: 32px;
-  height: 64px;
-  margin: 3px;
+/* Styles for halves and pips */
+.domino-half {
+  flex: 1; /* Each half takes up 50% of the space */
+  position: relative; /* Anchor for the pips */
+  border-top: 1px solid #eee; /* Divider line */
+}
+.domino-half:first-child {
+  border-top: none; /* No divider on the very top half */
 }
 
-/* SIDE DOMINOES - COMPLETELY FIXED NO STACKING */
-.position-left .hand-domino,
-.position-right .hand-domino {
-  width: 32px !important;
-  height: 64px !important;
-  margin: 0 !important;
-  position: relative !important;
-  flex-shrink: 0 !important;
-  transform-origin: center center !important;
-  /* CRITICAL: No overlapping margins or positions */
-  top: auto !important;
-  left: auto !important;
-  right: auto !important;
-  bottom: auto !important;
+/* NEW: Adjust divider line for rotated side-hand dominoes */
+#leftPlayer .domino-half,
+#rightPlayer .domino-half {
+  border-left: 1px solid #eee;
+  border-top: none;
+}
+#leftPlayer .domino-half:first-child,
+#rightPlayer .domino-half:first-child {
+  border-left: none;
 }
 
-/* Rotate side dominoes */
-.position-left .hand-domino {
-  transform: rotate(90deg) !important;
+
+.domino-pip {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  background: #333;
+  border-radius: 50%;
+  transform: translate(-50%, -50%); /* Center the pip on its coordinates */
 }
 
-.position-right .hand-domino {
-  transform: rotate(-90deg) !important;
+/* Modifier for dominoes played on the board */
+.domino--board {
+  position: absolute;
+  width: var(--board-tile-width);
+  height: var(--board-tile-height);
+  border-width: 2px;
+  border-radius: 6px;
 }
 
-/* HOVER EFFECTS */
-.hand-domino:hover {
-  transform: scale(1.05) translateY(-2px);
-  box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-  z-index: 10;
+/* Rotate side hands */
+#leftPlayer .domino {
+  transform: rotate(90deg);
+}
+#rightPlayer .domino {
+  transform: rotate(-90deg);
 }
 
-/* Side domino hover effects - maintain rotation */
-.position-left .hand-domino:hover {
-  transform: rotate(90deg) scale(1.1) !important;
-  z-index: 10;
+/* ==========================================================
+   BOARD
+   ========================================================== */
+#board {
+  position: relative;
+  background: radial-gradient(circle, rgba(0, 0, 0, .1) 0%, transparent 70%);
+  border: 2px dashed rgba(255, 255, 255, .4);
+  border-radius: 8px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
-.position-right .hand-domino:hover {
-  transform: rotate(-90deg) scale(1.1) !important;
-  z-index: 10;
-}
+/* ==========================================================
+   INTERACTIVITY HOOKS (for JS to toggle)
+   ========================================================== */
 
-/* PLAYABLE TILE STYLING */
-.hand-domino.playable {
-  border-color: #ffd700;
-  box-shadow: 0 0 12px rgba(255, 215, 0, 0.6);
+.playable {
+  border: 2px solid var(--accent-gold);
+  box-shadow: 0 0 8px var(--accent-gold);
   cursor: grab;
 }
 
-.hand-domino.playable:hover {
-  border-color: #ffed4e;
-  box-shadow: 0 0 18px rgba(255, 215, 0, 0.9);
-  transform: scale(1.1) translateY(-3px);
-}
-
-.position-left .hand-domino.playable:hover {
-  transform: rotate(90deg) scale(1.15) !important;
-}
-
-.position-right .hand-domino.playable:hover {
-  transform: rotate(-90deg) scale(1.15) !important;
-}
-
-/* DISABLED TILES */
-.hand-domino.disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  filter: grayscale(0.3);
-}
-
-/* DUMMY TILES (opponent hands) */
-.hand-domino.dummy {
-  background: linear-gradient(135deg, #4a5568 0%, #2d3748 100%);
-  border: 2px solid #1a202c;
-  cursor: default;
-}
-
-.hand-domino.dummy:hover {
-  transform: none;
-  box-shadow: 0 3px 8px rgba(0,0,0,0.2);
-}
-
-.position-left .hand-domino.dummy:hover {
-  transform: rotate(90deg) !important;
-}
-
-.position-right .hand-domino.dummy:hover {
-  transform: rotate(-90deg) !important;
-}
-
-/* DOMINO SECTIONS (pips) */
-.domino-section {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  min-height: 30px;
-  font-weight: bold;
-  color: #333;
-  font-size: 16px;
-}
-
-.domino-section.top {
-  border-bottom: 1px solid #333;
-}
-
-/* PIP STYLING */
-.pip-container {
-  position: relative;
-  width: 100%;
-  height: 100%;
-}
-
-.pip {
-  position: absolute;
-  width: 4px;
-  height: 4px;
-  background: #333;
-  border-radius: 50%;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.3);
-}
-
-/* Game Board */
-#board {
-  grid-area: board;
-  position: relative;
-  background: radial-gradient(circle at center, rgba(255,255,255,0.05) 0%, transparent 70%);
-  border-radius: var(--radius-lg);
-  padding: var(--space-lg);
-  min-height: 350px;
-  border: 2px solid rgba(255,255,255,0.1);
-  box-shadow: inset 0 4px 8px rgba(0,0,0,0.2);
-}
-
-/* Board Dominoes */
-.board-domino {
-  position: absolute;
-  width: 50px;
-  height: 100px;
-  background: linear-gradient(135deg, #ffffff 0%, #f0f0f0 100%);
-  border: 3px solid #333;
-  border-radius: 8px;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-  z-index: 10;
-  transition: all 0.3s ease;
-}
-
-.board-domino:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 18px rgba(0,0,0,0.4);
-}
-
-/* Drop Zones */
 .drop-zone {
   position: absolute;
   width: 60px;
-  height: 90px;
-  border: 3px dashed #ffd700;
-  border-radius: 10px;
-  background: rgba(255, 215, 0, 0.1);
-  opacity: 0;
-  transition: all 0.3s ease;
-  pointer-events: all;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #ffd700;
-  font-size: 12px;
-  font-weight: bold;
-  text-align: center;
-  z-index: 50;
+  height: 100px;
+  border: 3px dashed var(--accent-gold);
+  border-radius: 8px;
+  background: rgba(255, 215, 0, .1);
+  pointer-events: none;
 }
 
-.drop-zone:hover {
-  background: rgba(255, 215, 0, 0.3);
-  border-color: #ffed4e;
-  transform: scale(1.05);
+.drop-zone--active {
+  pointer-events: auto;
 }
 
-/* Dragging States */
-body.dragging {
-  cursor: grabbing !important;
-  user-select: none;
+.flash {
+  animation: flash-animation 0.7s ease-out;
 }
 
-body.dragging * {
-  cursor: inherit !important;
+@keyframes flash-animation {
+  0%, 100% { box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+  50% { box-shadow: 0 0 15px 5px rgba(255, 255, 0, 0.7); }
 }
 
-.dragging-tile {
-  transition: none !important;
-  cursor: grabbing !important;
-}
-
-/* Lobby */
-#lobbyContainer {
-  display: none;
-}
-
-#lobbyList {
-  list-style: none;
-  background: #f8f9fa;
-  border-radius: var(--radius-sm);
-  padding: var(--space-sm);
-}
-
-#lobbyList li {
-  padding: var(--space-xs) var(--space-sm);
-  border-bottom: 1px solid #e9ecef;
-  color: var(--text-secondary);
-  font-weight: 500;
-}
-
-/* SCROLLBARS for side containers */
-.position-left .player-hand-container::-webkit-scrollbar,
-.position-right .player-hand-container::-webkit-scrollbar {
-  width: 8px;
-}
-
-.position-left .player-hand-container::-webkit-scrollbar-track,
-.position-right .player-hand-container::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
-}
-
-.position-left .player-hand-container::-webkit-scrollbar-thumb,
-.position-right .player-hand-container::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.3);
-  border-radius: 4px;
-}
-
-.position-left .player-hand-container::-webkit-scrollbar-thumb:hover,
-.position-right .player-hand-container::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.5);
-}
-
-/* ANIMATIONS */
-@keyframes slideIn {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes placeholderPulse {
-  0%, 100% {
-    opacity: 0.6;
-    transform: translate(-50%, -50%) scale(1);
-  }
-  50% {
-    opacity: 1;
-    transform: translate(-50%, -50%) scale(1.05);
-  }
-}
-
-.starting-tile-placeholder {
-  animation: placeholderPulse 2s ease-in-out infinite;
-}
-
-@keyframes scoreUpdate {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.2); color: var(--accent-gold); }
-  100% { transform: scale(1); }
-}
-
-@keyframes shake {
-  0%, 100% { transform: translateX(0); }
-  10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
-  20%, 40%, 60%, 80% { transform: translateX(5px); }
-}
-
-/* RESPONSIVE DESIGN */
-@media (max-width: 1200px) {
-  .game-container {
-    grid-template-columns: 260px 1fr;
-  }
-  
-  .game-table {
-    grid-template-columns: 180px 1fr 180px;
-  }
-  
-  .board-domino {
-    width: 40px;
-    height: 80px;
-  }
-  
-  .hand-domino {
-    width: 28px;
-    height: 56px;
-  }
-}
-
+/* ==========================================================
+   RESPONSIVE TWEAKS
+   ========================================================== */
 @media (max-width: 768px) {
-  .game-container {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto 1fr;
-    height: 100vh;
+  :root {
+    --hand-tile-width: 26px;
+    --hand-tile-height: 52px;
+    --board-tile-width: 40px;
+    --board-tile-height: 80px;
   }
-  
-  .info-panel {
-    order: 2;
-    max-height: 200px;
+
+  #game-container {
+    grid-template-columns: 100px 1fr 100px;
+    grid-template-rows: 90px 1fr 90px;
+    padding: 8px;
+    gap: 6px;
   }
-  
-  .game-table {
-    order: 1;
-    grid-template-areas:
-      "top-player"
-      "board"
-      "left-player right-player" 
-      "player-hand";
-    grid-template-columns: 1fr 1fr;
-    grid-template-rows: auto 1fr auto auto;
+
+  /* NEW: Responsive pip and drop-zone sizing */
+  .domino-pip {
+    width: 5px;
+    height: 5px;
   }
-  
-  .hand-domino {
-    width: 24px;
-    height: 48px;
-  }
-  
-  #leftPlayer,
-  #rightPlayer {
-    min-height: 200px;
+
+  .drop-zone {
+    width: 50px;
+    height: 85px;
   }
 }
-
-/* UTILITY CLASSES */
-.visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-
-/* FORCE LAYOUT FIXES - Critical overrides */
-.position-left,
-.position-right {
-  contain: layout style !important;
-}
-
-/* Override any conflicting styles that might cause stacking */
-.position-left .player-hand-container *,
-.position-right .player-hand-container * {
-  position: relative !important;
-}
-
-/* Debug mode - uncomment to see containers */
-/*
-.position-left .player-hand-container {
-  border: 3px solid red !important;
-  background: rgba(255, 0, 0, 0.1) !important;
-}
-
-.position-right .player-hand-container {
-  border: 3px solid blue !important;
-  background: rgba(0, 0, 255, 0.1) !important;
-}
-*/

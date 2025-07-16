@@ -1,171 +1,46 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Dominican Domino - Real-time multiplayer domino game">
-    <meta name="keywords" content="domino, dominoes, multiplayer, game, dominican, online">
-    <meta name="author" content="Dominican Domino">
-    <title>Dominican Domino - Multiplayer Online Game</title>
-    
-    <!-- Preconnect for performance -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    
-    <!-- Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
-    
-    <!-- Styles -->
-    <link rel="stylesheet" href="css/style.css">
-    
-    <!-- Favicon (optional - you can add your own) -->
-    <link rel="icon" type="image/x-icon" href="/favicon.ico">
-</head>
+<!-- =====================================================================
+  DOMINICAN DOMINO  –  CORE GAME GRID
+  -----------------------------------------------------------------------
+  AI NOTES (for hand‑off):
+  • Seat order is counter‑clockwise ➜ 0 (bottom/You), 1 (left),
+    2 (top), 3 (right).  Keep this invariant across JS + CSS.
+  • .player‑area wrappers never receive tiles directly; the inner
+    .hand‑container is where HandRenderer injects .domino‑tile nodes.
+  • #board is the ONLY element BoardRenderer touches.
+  • All sizing / flex‑direction is handled in `main.css`, not here.
+  ==================================================================== -->
 <body>
-    <!-- Main game container -->
-    <div class="game-container">
-        
-        <!-- Left sidebar with game information -->
-        <aside class="info-panel" role="complementary" aria-label="Game information panel">
-            
-            <!-- Game title and player info -->
-            <section class="info-section">
-                <h1>Dominican Domino</h1>
-                <p id="playerInfo" aria-live="polite">Connecting to server...</p>
-                <div id="errors" class="error-display" aria-live="assertive" role="alert"></div>
-            </section>
-            
-            <!-- Current game status -->
-            <section class="info-section">
-                <h3>Game Status</h3>
-                <p id="status" aria-live="polite">Initializing...</p>
-            </section>
-            
-            <!-- Team scores -->
-            <section class="info-section">
-                <h3>Team Scores</h3>
-                <div class="score-display">
-                    <div class="score-box your-team-color" aria-label="Team 0 score (your team)">
-                        <span>Team 0 & 2</span>
-                        <strong id="team0-score">0</strong>
-                    </div>
-                    <div class="score-box opponent-team-color" aria-label="Team 1 score (opponents)">
-                        <span>Team 1 & 3</span>
-                        <strong id="team1-score">0</strong>
-                    </div>
-                </div>
-            </section>
-            
-            <!-- Lobby player list -->
-            <section class="info-section" id="lobbyContainer" aria-label="Player lobby">
-                <h3>Players in Room</h3>
-                <ul id="lobbyList" role="list" aria-label="List of players in the current room"></ul>
-            </section>
-            
-            <!-- Game event messages -->
-            <section class="info-section">
-                <h3>Game Events</h3>
-                <div id="messages" class="message-log" aria-live="polite" role="log" aria-label="Game event messages"></div>
-            </section>
-        </aside>
-
-        <!-- Main game table area -->
-        <main class="game-table" role="main" aria-label="Dominican domino game board">
-            
-            <!-- Top player (seat varies based on your position) -->
-            <div class="player-area top" id="topPlayer" aria-label="Top player area">
-                <div class="player-name">Top Player</div>
-                <!-- Hand container will be dynamically assigned here -->
-            </div>
-            
-            <!-- Left player (seat varies based on your position) -->
-            <div class="player-area left" id="leftPlayer" aria-label="Left player area">
-                <div class="player-name">Left Player</div>
-                <!-- Hand container will be dynamically assigned here -->
-            </div>
-            
-            <!-- Game board (center) -->
-            <div id="board" class="game-board" role="img" aria-label="Domino game board - dominoes are placed here">
-                <!-- Dominoes will be dynamically inserted here by the game engine -->
-            </div>
-            
-            <!-- Right player (seat varies based on your position) -->
-            <div class="player-area right" id="rightPlayer" aria-label="Right player area">
-                <div class="player-name">Right Player</div>
-                <!-- Hand container will be dynamically assigned here -->
-            </div>
-            
-            <!-- Bottom player (always you) -->
-            <div class="player-area bottom" id="bottomPlayer" aria-label="Your player area">
-                <div class="player-name">Your Hand</div>
-                <!-- Hand container will be dynamically assigned here -->
-            </div>
-            
-            <!-- Hidden hand containers - These get moved to player areas based on seating -->
-            <div style="display: none;" aria-hidden="true">
-                <div id="hand0" class="player-hand-container" aria-label="Seat 0 hand"></div>
-                <div id="hand1" class="player-hand-container" aria-label="Seat 1 hand"></div>
-                <div id="hand2" class="player-hand-container" aria-label="Seat 2 hand"></div>
-                <div id="hand3" class="player-hand-container" aria-label="Seat 3 hand"></div>
-            </div>
-        </main>
+  <div id="game-container">
+    
+    <!-- ─────── TOP PLAYER  (Seat 2) ─────── -->
+    <div id="topPlayer" class="player-area vertical" data-seat="2">
+      <!-- HandRenderer will fill #hand2 -->
+      <div id="hand2" class="hand-container"></div>
     </div>
 
-    <!-- Loading indicator (hidden by default) -->
-    <div id="loadingIndicator" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 9999;">
-        <div style="padding: 20px; background: rgba(0,0,0,0.8); color: white; border-radius: 10px; text-align: center;">
-            <div style="margin-bottom: 10px;">🎲</div>
-            <div>Loading Dominican Domino...</div>
-        </div>
+    <!-- ─────── MIDDLE ROW: Left – Board – Right ─────── -->
+    <div id="middle-row">
+      
+      <!-- LEFT PLAYER  (Seat 1) -->
+      <div id="leftPlayer" class="player-area horizontal" data-seat="1">
+        <div id="hand1" class="hand-container"></div>
+      </div>
+
+      <!-- GAME BOARD  (BoardRenderer lives here) -->
+      <div id="board" class="board-container">
+        <!-- Dominoes & drop‑zones are injected dynamically -->
+      </div>
+
+      <!-- RIGHT PLAYER  (Seat 3) -->
+      <div id="rightPlayer" class="player-area horizontal" data-seat="3">
+        <div id="hand3" class="hand-container"></div>
+      </div>
+    </div><!-- /middle‑row -->
+
+    <!-- ─────── BOTTOM PLAYER  (Seat 0 – YOU) ─────── -->
+    <div id="bottomPlayer" class="player-area vertical" data-seat="0">
+      <div id="hand0" class="hand-container"></div>
     </div>
 
-    <!-- Scripts - Load in correct order -->
-    
-    <!-- Socket.IO (must be first) -->
-    <script src="/socket.io/socket.io.js"></script>
-    
-    <!-- Core Game Modules -->
-    <script src="src/game/gameState.js"></script>
-    
-    <!-- UI Modules -->
-    <script src="src/ui/uiManager.js"></script>
-    <script src="src/ui/boardRenderer.js"></script>
-    <script src="src/ui/handRenderer.js"></script>
-    
-    <!-- Lobby Modules -->
-    <script src="src/lobby/connectionManager.js"></script>
-    <script src="src/lobby/lobbyManager.js"></script>
-    
-    <!-- Game Logic Modules -->
-    <script src="src/game/gameManager.js"></script>
-    <script src="src/game/dragDropManager.js"></script>
-    
-    <!-- Bootstrap (must be last) -->
-    <script src="client.js"></script>
-
-    <!-- Optional: Service Worker for offline support -->
-    <script>
-        // Register service worker for caching (optional)
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                // navigator.serviceWorker.register('/sw.js')
-                //     .then(registration => console.log('SW registered'))
-                //     .catch(registrationError => console.log('SW registration failed'));
-            });
-        }
-    </script>
-
-    <!-- Schema markup for SEO (optional) -->
-    <script type="application/ld+json">
-    {
-        "@context": "https://schema.org",
-        "@type": "Game",
-        "name": "Dominican Domino",
-        "description": "Real-time multiplayer Dominican domino game for 4 players",
-        "gameCategory": "BoardGame",
-        "numberOfPlayers": "4",
-        "playMode": "MultiPlayer"
-    }
-    </script>
+  </div><!-- /game‑container -->
 </body>
-</html>

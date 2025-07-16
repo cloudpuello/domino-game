@@ -1,109 +1,88 @@
 /* =====================================================================
  * engine/game.js - Core domino rules & helpers (mode-agnostic foundation)
+ *
+ * REFACTORED to use shared constants and utilities.
  * =================================================================== */
 
+// Note: Ensure this relative path is correct for your project structure.
 const { dealHands } = require('./utils');
+const GC = require('../shared/constants/gameConstants'); // GameConstants
+const DU = require('../shared/utils/dominoUtils');      // DominoUtils
 
 /* ────────────────────────────────────────────────────────────────────────
- * Constants and helpers
+ * Core Game Functions
  * ────────────────────────────────────────────────────────────────────── */
-const TURN_ORDER = [0, 1, 2, 3];
-const OPENING_TILE = [6, 6];
-const HAND_SIZE = 7;
 
-const nextSeat = seat => TURN_ORDER[(TURN_ORDER.indexOf(seat) + 1) % 4];
-const teamOf = seat => seat % 2;
-
-/* ────────────────────────────────────────────────────────────────────────
- * placeTile – validates and places a tile, seeding ends on the first move
- * ────────────────────────────────────────────────────────────────────── */
+/**
+ * Validates and places a tile on the board.
+ * Flips the tile if necessary and updates the board's exposed ends.
+ * @returns {boolean} - True if the placement was successful.
+ */
 function placeTile(room, tile, sideHint) {
-  const [a, b] = tile;
-  let side = sideHint;
-
-  /* First tile of the round → seed the board instantly */
+  // On the first move, the board is seeded directly.
   if (room.board.length === 0) {
-    room.board.push([a, b]);
-    room.leftEnd = a;
-    room.rightEnd = b;
+    if (!DU.sameTile(tile, GC.FIRST_TILE)) return false; // Must start with the designated tile
+    room.board.push([...tile]); // Use a copy
+    room.leftEnd = tile[0];
+    room.rightEnd = tile[1];
     return true;
   }
 
-  /* Check if tile fits on either end */
-  const fitsLeft = (a === room.leftEnd || b === room.leftEnd);
-  const fitsRight = (a === room.rightEnd || b === room.rightEnd);
-  
-  if (!fitsLeft && !fitsRight) {
+  const playableSides = DU.playableSides(tile, room.board);
+  if (playableSides.length === 0) {
+    return false; // Not a legal move
+  }
+
+  // If a side is specified, use it. Otherwise, auto-pick if there's only one option.
+  const side = sideHint || (playableSides.length === 1 ? playableSides[0] : null);
+  if (!side) {
+    // This case should be handled by the client prompting the user.
+    // Server should ideally receive an explicit side when ambiguous.
+    console.warn(`[Game Engine] Ambiguous play received for tile [${tile}] without a side hint. Rejecting move.`);
     return false;
   }
 
-  /* Auto-determine side if not specified */
-  if (!side) {
-    side = fitsRight ? 'right' : 'left';
-  }
+  const valueToMatch = (side === 'left') ? room.leftEnd : room.rightEnd;
+  const finalTile = _orientTile(tile, valueToMatch, side);
 
-  /* Place tile on the specified side */
   if (side === 'left') {
-    return _placeTileOnLeft(room, tile, a, b);
-  } else {
-    return _placeTileOnRight(room, tile, a, b);
+    room.board.unshift(finalTile);
+    room.leftEnd = finalTile[0];
+  } else { // side === 'right'
+    room.board.push(finalTile);
+    room.rightEnd = finalTile[1];
   }
-}
 
-/* ────────────────────────────────────────────────────────────────────────
- * Private helper functions for tile placement
- * ────────────────────────────────────────────────────────────────────── */
-function _placeTileOnLeft(room, tile, a, b) {
-  const fitsLeft = (a === room.leftEnd || b === room.leftEnd);
-  if (!fitsLeft) return false;
-
-  if (a === room.leftEnd) {
-    room.board.unshift([b, a]);
-    room.leftEnd = b;
-  } else {
-    room.board.unshift([a, b]);
-    room.leftEnd = a;
-  }
   return true;
 }
 
-function _placeTileOnRight(room, tile, a, b) {
-  const fitsRight = (a === room.rightEnd || b === room.rightEnd);
-  if (!fitsRight) return false;
 
-  if (a === room.rightEnd) {
-    room.board.push([a, b]);
-    room.rightEnd = b;
-  } else {
-    room.board.push([b, a]);
-    room.rightEnd = a;
-  }
-  return true;
-}
-
-/* ────────────────────────────────────────────────────────────────────────
- * initNewRound – reset state, deal hands, choose opener, notify players
- * ────────────────────────────────────────────────────────────────────── */
+/**
+ * Resets the board state, deals new hands, finds the opening player,
+ * and notifies all players that a new round has begun.
+ */
 function initNewRound(room, io) {
   _resetRoundState(room);
-  _dealHandsToPlayers(room);
-  
+  dealHands(room); // Assumes dealHands populates room.players[seat].hand
+
   const opener = _determineOpener(room);
-  _setOpener(room, opener);
-  
+  room.turn = opener;
+  room.turnStarter = opener;
+
   _notifyPlayersRoundStart(room, io, opener);
-  _announceTurn(room, io, opener);
+  io.in(room.id).emit('turnChanged', opener);
 }
 
+
 /* ────────────────────────────────────────────────────────────────────────
- * Private helper functions for round initialization
+ * Private Helper Functions
  * ────────────────────────────────────────────────────────────────────── */
+
 function _resetRoundState(room) {
   Object.assign(room, {
     board: [],
     leftEnd: null,
     rightEnd: null,
-    pipCounts: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 },
     turn: null,
     turnStarter: null,
     lastMoverSeat: null,
@@ -112,39 +91,39 @@ function _resetRoundState(room) {
   });
 }
 
-function _dealHandsToPlayers(room) {
-  dealHands(room);
+/** Flips a tile if needed to ensure its connecting value is on the correct edge. */
+function _orientTile(tile, valueToMatch, side) {
+    if (side === 'left') {
+        // For the left side, the matching value must end up on the right of the new tile.
+        return (tile[0] === valueToMatch) ? DU.flipped(tile) : [...tile];
+    } else { // side === 'right'
+        // For the right side, the matching value must end up on the left of the new tile.
+        return (tile[1] === valueToMatch) ? DU.flipped(tile) : [...tile];
+    }
 }
 
 function _determineOpener(room) {
+  // First round of the entire game is opened by the player with the double-six.
   if (room.isFirstRound) {
-    const openerSeat = _findPlayerWithOpeningTile(room);
     room.isFirstRound = false;
+    const openerSeat = _findPlayerWithOpeningTile(room);
     return openerSeat;
-  } else {
-    return room.lastWinnerSeat ?? 0;
   }
+  // Subsequent rounds are opened by the winner of the previous round.
+  return room.lastWinnerSeat ?? GC.SEAT_ORDER[0]; // Default to seat 0 if no winner yet
 }
 
 function _findPlayerWithOpeningTile(room) {
   const openerSeatStr = Object.keys(room.players).find(seat =>
-    room.players[seat] &&
-    room.players[seat].hand.some(([x, y]) => 
-      x === OPENING_TILE[0] && y === OPENING_TILE[1]
-    )
+    room.players[seat]?.hand.some(tile => DU.sameTile(tile, GC.FIRST_TILE))
   );
-  return openerSeatStr !== undefined ? Number(openerSeatStr) : 0;
-}
-
-function _setOpener(room, opener) {
-  room.turn = opener;
-  room.turnStarter = opener;
+  return openerSeatStr !== undefined ? Number(openerSeatStr) : GC.SEAT_ORDER[0]; // Default to seat 0
 }
 
 function _notifyPlayersRoundStart(room, io, opener) {
   Object.values(room.players).forEach(player => {
-    if (!player || !player.isConnected) return;
-    
+    if (!player?.isConnected) return;
+
     io.to(player.socketId).emit('roundStart', {
       yourHand: player.hand,
       startingSeat: opener,
@@ -153,87 +132,15 @@ function _notifyPlayersRoundStart(room, io, opener) {
   });
 }
 
-function _announceTurn(room, io, opener) {
-  io.in(room.id).emit('turnChanged', opener);
-}
-
-/* ────────────────────────────────────────────────────────────────────────
- * Validation helpers
- * ────────────────────────────────────────────────────────────────────── */
-function canPlayTile(tile, leftEnd, rightEnd) {
-  if (leftEnd === null && rightEnd === null) {
-    // First move must be opening tile
-    const [a, b] = tile;
-    return a === OPENING_TILE[0] && b === OPENING_TILE[1];
-  }
-  
-  const [a, b] = tile;
-  return (a === leftEnd || b === leftEnd || a === rightEnd || b === rightEnd);
-}
-
-function isValidFirstMove(tile) {
-  const [a, b] = tile;
-  return a === OPENING_TILE[0] && b === OPENING_TILE[1];
-}
-
-/* ────────────────────────────────────────────────────────────────────────
- * Board state helpers
- * ────────────────────────────────────────────────────────────────────── */
-function getBoardEnds(room) {
-  if (room.board.length === 0) {
-    return { left: null, right: null };
-  }
-  
-  return {
-    left: room.leftEnd,
-    right: room.rightEnd
-  };
-}
-
-function isBoardEmpty(room) {
-  return room.board.length === 0;
-}
-
-/* ────────────────────────────────────────────────────────────────────────
- * Game state helpers
- * ────────────────────────────────────────────────────────────────────── */
-function isFirstRound(room) {
-  return room.isFirstRound;
-}
-
-function getCurrentTurn(room) {
-  return room.turn;
-}
-
-function getLastMover(room) {
-  return room.lastMoverSeat;
-}
-
 /* ────────────────────────────────────────────────────────────────────────
  * Exports
  * ────────────────────────────────────────────────────────────────────── */
 module.exports = {
   // Core game functions
-  nextSeat,
-  teamOf,
   placeTile,
   initNewRound,
-  
-  // Validation helpers
-  canPlayTile,
-  isValidFirstMove,
-  
-  // Board state helpers
-  getBoardEnds,
-  isBoardEmpty,
-  
-  // Game state helpers
-  isFirstRound,
-  getCurrentTurn,
-  getLastMover,
-  
-  // Constants
-  TURN_ORDER,
-  OPENING_TILE,
-  HAND_SIZE,
+
+  // Simple helpers that can be useful elsewhere
+  nextSeat: (seat) => GC.SEAT_ORDER[(GC.SEAT_ORDER.indexOf(seat) + 1) % 4],
+  teamOf: (seat) => seat % 2,
 };
