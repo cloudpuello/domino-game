@@ -148,23 +148,35 @@ const GameState = {
 
     // For empty board (first move)
     if (this.boardState.length === 0) {
-      // First round: Must have [6|6]
+      // First round: Must have [6|6] - and if it's my turn, I should have it
       if (this.isFirstRound) {
         const hasFirstTile = this.myHand.some(tile => 
           tile[0] === 6 && tile[1] === 6
         );
-        console.log(`GameState: First round, has [6|6]: ${hasFirstTile}`);
+        console.log(`GameState: First round, checking for [6|6]: ${hasFirstTile}`);
+        
+        // If it's my turn in first round, I MUST have [6|6]
+        if (this.isMyTurn() && !hasFirstTile) {
+          console.error('GameState: ERROR - It\'s my turn in first round but I don\'t have [6|6]!');
+        }
+        
         return hasFirstTile;
       } else {
         // Subsequent rounds: Can play any tile
         console.log('GameState: Subsequent round, can play any tile');
-        return true;
+        return this.myHand.length > 0;
       }
     }
 
     // For non-empty board: Check if any tile matches ends
     const hasPlayable = this.myHand.some(tile => this.isTilePlayable(tile));
     console.log(`GameState: Has playable tiles: ${hasPlayable}`);
+    
+    if (!hasPlayable) {
+      console.log('GameState: No playable tiles. Board ends:', this.leftEnd, this.rightEnd);
+      console.log('GameState: My tiles:', this.myHand);
+    }
+    
     return hasPlayable;
   },
 

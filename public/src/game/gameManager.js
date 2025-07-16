@@ -37,7 +37,7 @@ const GameManager = {
   },
 
   /**
-   * Handle round start with Dominican rules
+   * Enhanced round start for Dominican rules with proper opener detection
    */
   handleRoundStart(data) {
     console.log('GameManager: Dominican round starting', data);
@@ -54,6 +54,7 @@ const GameManager = {
     GameState.reset();
     GameState.isGameActive = true;
     GameState.gameRules = 'dominican';
+    GameState.isFirstRound = data.isFirstRound || false;
     
     // CRITICAL: Update hand before rendering
     if (data.yourHand && data.yourHand.length > 0) {
@@ -76,7 +77,7 @@ const GameManager = {
     this.clearMessages();
     this.updateAllDisplays();
     
-    // Set initial status
+    // Set initial status - NO AUTO-PASS CHECK YET
     this.setInitialDominicanStatus(data.startingSeat, data.isFirstRound);
     
     // Add Dominican-specific message
@@ -84,6 +85,13 @@ const GameManager = {
       'New Dominican game started! First round: Must play [6|6]' : 
       'New round started! Winner opens with any tile';
     UIManager.addMessage(gameMessage);
+    
+    // IMPORTANT: Log who should have the [6|6] in first round
+    if (data.isFirstRound) {
+      const hasDoubleSix = GameState.myHand.some(tile => tile[0] === 6 && tile[1] === 6);
+      console.log(`GameManager: First round - I ${hasDoubleSix ? 'HAVE' : 'DO NOT HAVE'} [6|6]`);
+      console.log(`GameManager: Starting seat is ${data.startingSeat}, my seat is ${GameState.mySeat}`);
+    }
     
     console.log('GameManager: Dominican round initialized successfully');
   },
@@ -146,12 +154,38 @@ const GameManager = {
   },
 
   /**
-   * Check for valid moves in Dominican rules
+   * Check for valid moves in Dominican rules - FIXED for first round
    */
   checkDominicanMoves() {
-    if (!GameState.isMyTurn()) return;
+    if (!GameState.isMyTurn()) {
+      console.log('GameManager: Not my turn, skipping move check');
+      return;
+    }
 
+    console.log('GameManager: Checking Dominican moves...');
+    console.log('GameManager: Board length:', GameState.boardState.length);
+    console.log('GameManager: Is first round:', GameState.isFirstRound);
+    console.log('GameManager: My hand:', GameState.myHand);
+
+    // For first round, only check if player has [6|6]
+    if (GameState.boardState.length === 0 && GameState.isFirstRound) {
+      const hasDoubleSix = GameState.myHand.some(tile => tile[0] === 6 && tile[1] === 6);
+      console.log(`GameManager: First round - checking for [6|6]: ${hasDoubleSix}`);
+      
+      if (hasDoubleSix) {
+        this.showDominicanPlayableOptions();
+        return;
+      } else {
+        // This should NEVER happen if opener detection works correctly
+        console.error('GameManager: ERROR - It\'s my turn in first round but I don\'t have [6|6]!');
+        UIManager.addMessage('ERROR: Turn order problem - I don\'t have [6|6]!');
+        return;
+      }
+    }
+
+    // For regular moves, check normal playability
     const hasPlayableTiles = GameState.hasPlayableTiles();
+    console.log(`GameManager: Has playable tiles: ${hasPlayableTiles}`);
     
     if (!hasPlayableTiles) {
       this.initiateDominicanAutoPass();
