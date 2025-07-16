@@ -1,19 +1,19 @@
 /* =====================================================================
- * src/game/gameManager.js — Dominican Domino Game Manager
+ * src/game/gameManager.js — Dominican Domino Game Manager (CORRECT RULES)
  *
- * IMPLEMENTS DOMINICAN RULES ON CLIENT:
- * - Counter-clockwise turn order display
- * - Proper hand rendering after round start
- * - Dominican-specific messaging
- * - Fixed auto-pass logic for Dominican rules
+ * IMPLEMENTS CORRECT DOMINICAN RULES ON CLIENT:
+ * - User always at bottom (seat 0)
+ * - Counter-clockwise turn order [0,3,2,1]
+ * - Only first game requires [6|6]
+ * - Subsequent rounds: winner starts with any tile
  * =================================================================== */
 
 const GameManager = {
   autoPassTimer: null,
-  gameRules: 'dominican', // Set to Dominican rules
+  gameRules: 'dominican-correct',
 
   init() {
-    console.log('GameManager: Initializing Dominican Domino client');
+    console.log('GameManager: Initializing Dominican Domino client (CORRECT RULES)');
 
     if (!window.socket) {
       console.error('GameManager: Socket not available');
@@ -37,10 +37,10 @@ const GameManager = {
   },
 
   /**
-   * Enhanced round start for Dominican rules with validation
+   * Handle round start with correct Dominican rules
    */
   handleRoundStart(data) {
-    console.log('GameManager: Dominican round starting', data);
+    console.log('GameManager: Dominican round starting (CORRECT RULES)', data);
     
     // Clear any existing timers
     this.clearAutoPassTimer();
@@ -53,10 +53,11 @@ const GameManager = {
     // Reset and update game state
     GameState.reset();
     GameState.isGameActive = true;
-    GameState.gameRules = 'dominican';
-    GameState.isFirstRound = data.isFirstRound || false;
+    GameState.gameRules = 'dominican-correct';
+    GameState.gamePhase = data.gamePhase || 'firstGame';
+    GameState.isFirstGame = data.isFirstGame || false;
     
-    // CRITICAL: Update hand before rendering
+    // Update hand
     if (data.yourHand && data.yourHand.length > 0) {
       GameState.updateMyHand(data.yourHand);
       console.log(`GameManager: Received hand with ${data.yourHand.length} tiles:`, data.yourHand);
@@ -77,52 +78,81 @@ const GameManager = {
     this.clearMessages();
     this.updateAllDisplays();
     
-    // CRITICAL: Validate first round logic
-    if (data.isFirstRound) {
-      this.validateFirstRoundLogic(data.startingSeat);
+    // Validate game phase logic
+    if (data.isFirstGame) {
+      this.validateFirstGameLogic(data.startingSeat);
+    } else {
+      this.validateSubsequentRoundLogic(data.startingSeat);
     }
     
-    // Set initial status - NO AUTO-PASS CHECK YET
-    this.setInitialDominicanStatus(data.startingSeat, data.isFirstRound);
+    // Set initial status
+    this.setInitialDominicanStatus(data.startingSeat, data.isFirstGame);
     
-    // Add Dominican-specific message
-    const gameMessage = data.isFirstRound ? 
-      'New Dominican game started! First round: Must play [6|6]' : 
-      'New round started! Winner opens with any tile';
+    // Add game-specific message
+    const gameMessage = data.isFirstGame ? 
+      '🎲 First game started! Must begin with [6|6]' : 
+      '🏆 New round! Winner starts with any tile';
     UIManager.addMessage(gameMessage);
+    
+    // Show seat position info
+    if (data.yourSeatPosition) {
+      UIManager.addMessage(`You are seated at: ${data.yourSeatPosition}`);
+    }
     
     console.log('GameManager: Dominican round initialized successfully');
   },
 
   /**
-   * Validate first round logic - check if the right player was chosen
+   * Validate first game logic - only first game requires [6|6]
    */
-  validateFirstRoundLogic(startingSeat) {
-    console.log('=== FIRST ROUND VALIDATION ===');
+  validateFirstGameLogic(startingSeat) {
+    console.log('=== FIRST GAME VALIDATION ===');
     
     const myHand = GameState.myHand;
     const hasDoubleSix = myHand.some(tile => tile[0] === 6 && tile[1] === 6);
     const mySeat = GameState.mySeat;
     
-    console.log(`My seat: ${mySeat}`);
+    console.log(`My seat: ${mySeat} (should be 0 for user)`);
     console.log(`Starting seat: ${startingSeat}`);
     console.log(`I have [6|6]: ${hasDoubleSix}`);
     console.log(`My hand:`, myHand);
     
     if (hasDoubleSix && startingSeat !== mySeat) {
-      console.error('❌ VALIDATION ERROR: I have [6|6] but server chose someone else to start!');
+      console.error('❌ FIRST GAME ERROR: I have [6|6] but server chose someone else!');
       UIManager.addMessage('❌ ERROR: I have [6|6] but it\'s not my turn!');
-      UIManager.showError('Server error: Wrong player chosen to start');
+      UIManager.showError('Server error: Wrong player chosen for first game');
     } else if (!hasDoubleSix && startingSeat === mySeat) {
-      console.error('❌ VALIDATION ERROR: Server chose me to start but I don\'t have [6|6]!');
+      console.error('❌ FIRST GAME ERROR: Server chose me but I don\'t have [6|6]!');
       UIManager.addMessage('❌ ERROR: It\'s my turn but I don\'t have [6|6]!');
-      UIManager.showError('Server error: You don\'t have [6|6] but were chosen to start');
+      UIManager.showError('Server error: You don\'t have [6|6] for first game');
     } else if (hasDoubleSix && startingSeat === mySeat) {
-      console.log('✅ VALIDATION SUCCESS: I have [6|6] and it\'s my turn');
-      UIManager.addMessage('✅ You have [6|6] and will start the game');
+      console.log('✅ FIRST GAME SUCCESS: I have [6|6] and it\'s my turn');
+      UIManager.addMessage('✅ You have [6|6] and will start the first game');
     } else {
-      console.log('⏳ VALIDATION: I don\'t have [6|6], waiting for correct player');
-      UIManager.addMessage('⏳ Waiting for player with [6|6] to start');
+      console.log('⏳ FIRST GAME WAITING: I don\'t have [6|6], waiting for correct player');
+      UIManager.addMessage('⏳ Waiting for player with [6|6] to start first game');
+    }
+  },
+
+  /**
+   * Validate subsequent round logic - winner can start with any tile
+   */
+  validateSubsequentRoundLogic(startingSeat) {
+    console.log('=== SUBSEQUENT ROUND VALIDATION ===');
+    
+    const mySeat = GameState.mySeat;
+    const myHand = GameState.myHand;
+    
+    console.log(`My seat: ${mySeat}`);
+    console.log(`Starting seat: ${startingSeat}`);
+    console.log(`My hand size: ${myHand.length}`);
+    
+    if (startingSeat === mySeat) {
+      console.log('✅ SUBSEQUENT ROUND: I am the winner and can start with any tile');
+      UIManager.addMessage('✅ You won the previous round! Start with any tile');
+    } else {
+      console.log('⏳ SUBSEQUENT ROUND: Previous winner will start');
+      UIManager.addMessage('⏳ Previous winner will start the round');
     }
   },
 
@@ -180,11 +210,25 @@ const GameManager = {
 
   handleOtherPlayerTurn(turn) {
     const playerName = this.getPlayerName(turn);
-    UIManager.setStatus(`${playerName}'s turn... 🇩🇴`);
+    const turnOrder = this.getTurnOrderDescription(turn);
+    UIManager.setStatus(`${playerName}'s turn ${turnOrder} 🇩🇴`);
   },
 
   /**
-   * Check for valid moves in Dominican rules - FIXED for first round
+   * Get user-friendly turn order description
+   */
+  getTurnOrderDescription(seat) {
+    const positions = {
+      0: '(You)',
+      1: '(Right)',
+      2: '(Top)', 
+      3: '(Left)'
+    };
+    return positions[seat] || '';
+  },
+
+  /**
+   * Check for valid moves with correct Dominican rules
    */
   checkDominicanMoves() {
     if (!GameState.isMyTurn()) {
@@ -194,26 +238,27 @@ const GameManager = {
 
     console.log('GameManager: Checking Dominican moves...');
     console.log('GameManager: Board length:', GameState.boardState.length);
-    console.log('GameManager: Is first round:', GameState.isFirstRound);
+    console.log('GameManager: Is first game:', GameState.isFirstGame);
+    console.log('GameManager: Game phase:', GameState.gamePhase);
     console.log('GameManager: My hand:', GameState.myHand);
 
-    // For first round, only check if player has [6|6]
-    if (GameState.boardState.length === 0 && GameState.isFirstRound) {
+    // For first game, only check if player has [6|6]
+    if (GameState.boardState.length === 0 && GameState.isFirstGame) {
       const hasDoubleSix = GameState.myHand.some(tile => tile[0] === 6 && tile[1] === 6);
-      console.log(`GameManager: First round - checking for [6|6]: ${hasDoubleSix}`);
+      console.log(`GameManager: First game - checking for [6|6]: ${hasDoubleSix}`);
       
       if (hasDoubleSix) {
         this.showDominicanPlayableOptions();
         return;
       } else {
         // This should NEVER happen if opener detection works correctly
-        console.error('GameManager: ERROR - It\'s my turn in first round but I don\'t have [6|6]!');
-        UIManager.addMessage('ERROR: Turn order problem - I don\'t have [6|6]!');
+        console.error('GameManager: ERROR - It\'s my turn in first game but I don\'t have [6|6]!');
+        UIManager.addMessage('ERROR: Turn order problem - I don\'t have [6|6] for first game!');
         return;
       }
     }
 
-    // For regular moves, check normal playability
+    // For subsequent rounds or regular moves, check normal playability
     const hasPlayableTiles = GameState.hasPlayableTiles();
     console.log(`GameManager: Has playable tiles: ${hasPlayableTiles}`);
     
@@ -228,7 +273,7 @@ const GameManager = {
     console.log('GameManager: Initiating Dominican auto-pass');
     
     UIManager.setStatus('🚫 No valid moves - Auto-passing in 3 seconds... 🇩🇴');
-    UIManager.addMessage('No valid moves available (Dominican rules) - passing automatically');
+    UIManager.addMessage('No valid moves available - passing automatically');
 
     if (UIManager.showNotification) {
       UIManager.showNotification('No valid moves! Passing automatically... 🇩🇴', 'warning', 3000);
@@ -243,16 +288,19 @@ const GameManager = {
 
   showDominicanPlayableOptions() {
     const ends = GameState.getBoardEnds();
+    const isFirstGame = GameState.isFirstGame;
+    const boardEmpty = GameState.boardState.length === 0;
     
-    if (ends) {
+    if (boardEmpty) {
+      if (isFirstGame) {
+        UIManager.setStatus('Your turn! 🇩🇴 Play the double-six [6|6] (first game)');
+      } else {
+        UIManager.setStatus('Your turn! 🇩🇴 Play any tile (you won previous round)');
+      }
+    } else if (ends) {
       UIManager.setStatus(`Your turn! 🇩🇴 Play on ${ends.left} or ${ends.right}`);
     } else {
-      // First move
-      if (GameState.gameRules === 'dominican') {
-        UIManager.setStatus('Your turn! 🇩🇴 Play the double-six [6|6]');
-      } else {
-        UIManager.setStatus('Your turn! 🇩🇴 Play any tile');
-      }
+      UIManager.setStatus('Your turn! 🇩🇴');
     }
   },
 
@@ -264,12 +312,13 @@ const GameManager = {
       seat: GameState.mySeat
     });
     
-    UIManager.addMessage('You passed (Dominican rules - no drawing) 🇩🇴');
+    UIManager.addMessage('You passed (no valid moves) 🇩🇴');
   },
 
   handlePlayerPassed(data) {
     const playerName = this.getPlayerName(data.seat);
-    const passMessage = `${playerName} passed 🇩🇴`;
+    const turnOrder = this.getTurnOrderDescription(data.seat);
+    const passMessage = `${playerName} ${turnOrder} passed 🇩🇴`;
     
     if (data.passCount) {
       UIManager.addMessage(`${passMessage} (${data.passCount}/4 passes)`);
@@ -295,7 +344,7 @@ const GameManager = {
     // Update displays
     this.updateAllDisplays();
     
-    // Show Dominican-specific results
+    // Show results
     this.showDominicanRoundResults(data);
   },
 
@@ -316,12 +365,12 @@ const GameManager = {
 
   /* ----------------- DOMINICAN-SPECIFIC UTILITIES ----------------- */
 
-  setInitialDominicanStatus(startingSeat, isFirstRound) {
+  setInitialDominicanStatus(startingSeat, isFirstGame) {
     if (GameState.isMyTurn()) {
-      if (isFirstRound) {
-        UIManager.setStatus('Your turn! 🇩🇴 Play the double-six [6|6]');
+      if (isFirstGame) {
+        UIManager.setStatus('Your turn! 🇩🇴 Play the double-six [6|6] (first game)');
       } else {
-        UIManager.setStatus('Your turn! 🇩🇴 Play any tile');
+        UIManager.setStatus('Your turn! 🇩🇴 Play any tile (you won previous round)');
       }
       
       // Check for moves after a delay
@@ -330,23 +379,29 @@ const GameManager = {
       }, 1000);
     } else {
       const playerName = this.getPlayerName(startingSeat);
-      UIManager.setStatus(`Waiting for ${playerName} to start... 🇩🇴`);
+      const turnOrder = this.getTurnOrderDescription(startingSeat);
+      const statusMessage = isFirstGame ? 
+        `Waiting for ${playerName} ${turnOrder} to play [6|6]... 🇩🇴` :
+        `Waiting for ${playerName} ${turnOrder} to start... 🇩🇴`;
+      UIManager.setStatus(statusMessage);
     }
   },
 
   addDominicanMoveMessage(data) {
     if (data.seat >= 0 && data.tile) {
       const playerName = this.getPlayerName(data.seat);
+      const turnOrder = this.getTurnOrderDescription(data.seat);
       const tile = `[${data.tile[0]}|${data.tile[1]}]`;
-      UIManager.addMessage(`${playerName} played ${tile} 🇩🇴`);
+      UIManager.addMessage(`${playerName} ${turnOrder} played ${tile} 🇩🇴`);
     }
   },
 
   showDominicanRoundResults(data) {
     const winnerName = this.getPlayerName(data.winner);
+    const winnerTurnOrder = this.getTurnOrderDescription(data.winner);
     const winnerTeam = data.winner % 2;
     
-    let message = `🏆 ${winnerName} wins the round! 🇩🇴`;
+    let message = `🏆 ${winnerName} ${winnerTurnOrder} wins the round! 🇩🇴`;
     
     // Add reason-specific messaging
     switch (data.reason) {
@@ -372,6 +427,14 @@ const GameManager = {
     UIManager.addMessage(scoreMessage);
     UIManager.addMessage(totalMessage);
     
+    // Show game phase info
+    if (data.gamePhase) {
+      const phaseMessage = data.gamePhase === 'firstGame' ? 
+        'Next: Normal rounds (winner starts)' : 
+        'Next: Winner starts with any tile';
+      UIManager.addMessage(phaseMessage);
+    }
+    
     // Show details if available
     if (data.details && data.details.length > 0) {
       data.details.forEach(detail => UIManager.addMessage(`  ${detail}`));
@@ -384,10 +447,14 @@ const GameManager = {
     UIManager.setStatus(message);
     UIManager.addMessage(message);
     UIManager.addMessage(`Final Scores - Team 1: ${data.scores[0]}, Team 2: ${data.scores[1]}`);
+    
+    if (data.totalGames) {
+      UIManager.addMessage(`Total games played: ${data.totalGames}`);
+    }
 
     setTimeout(() => {
       const newGame = confirm(
-        `🇩🇴 DOMINICAN DOMINO GAME OVER! 🇩🇴\n\n${message}\n\nFinal Scores:\nTeam 1: ${data.scores[0]}\nTeam 2: ${data.scores[1]}\n\nStart a new Dominican game?`
+        `🇩🇴 DOMINICAN DOMINO GAME OVER! 🇩🇴\n\n${message}\n\nFinal Scores:\nTeam 1: ${data.scores[0]}\nTeam 2: ${data.scores[1]}\n\nTotal Games: ${data.totalGames || 'N/A'}\n\nStart a new Dominican game?`
       );
       if (newGame) {
         location.reload();
@@ -453,12 +520,17 @@ const GameManager = {
     return {
       gameRules: this.gameRules,
       isGameActive: GameState.isGameActive,
+      gamePhase: GameState.gamePhase,
+      isFirstGame: GameState.isFirstGame,
       currentTurn: GameState.currentTurn,
       isMyTurn: GameState.isMyTurn(),
       myHandSize: GameState.myHand ? GameState.myHand.length : 0,
       boardSize: GameState.boardState ? GameState.boardState.length : 0,
       scores: GameState.scores,
-      hasAutoPassTimer: !!this.autoPassTimer
+      hasAutoPassTimer: !!this.autoPassTimer,
+      turnOrder: 'counter-clockwise [0,3,2,1]',
+      mySeat: GameState.mySeat,
+      userAlwaysAtBottom: true
     };
   }
 };

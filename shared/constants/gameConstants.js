@@ -1,11 +1,11 @@
 /* =====================================================================
- * shared/constants/gameConstants.js - Dominican Domino Rules
+ * shared/constants/gameConstants.js - Dominican Domino (CORRECT RULES)
  *
- * FIXED FOR DOMINICAN RULES:
- * - Counter-clockwise turn order
- * - Proper scoring system
- * - Capicú and Paso bonuses
- * - Right-hand block bonuses
+ * FIXED FOR PROPER DOMINICAN RULES & UX:
+ * - Only first game of first match requires [6|6]
+ * - User always sits at bottom (seat 0)
+ * - Clockwise turn order from user's perspective
+ * - Subsequent rounds: winner starts with any tile
  * =================================================================== */
 
 (function (root, factory) {
@@ -35,28 +35,45 @@
   })();
 
   /* ----------------------------------------------------------------- */
-  /* TABLE / SEATING - DOMINICAN COUNTER-CLOCKWISE ORDER ------------- */
+  /* TABLE / SEATING - USER-FRIENDLY LAYOUT -------------------------- */
   /* ----------------------------------------------------------------- */
-  /** Seat indexes (counter‑clockwise from your perspective) */
+  /** 
+   * FIXED: User always at bottom, COUNTER-CLOCKWISE turn order
+   * Visual layout:
+   *     [2] Top
+   * [3] Left   Right [1] 
+   *     [0] Bottom (User)
+   * 
+   * Counter-clockwise flow: User -> Left -> Top -> Right -> User
+   */
   const SEATS = Object.freeze({
-    SOUTH: 0, // you
-    WEST:  3, // player to your right (next in turn order)
-    NORTH: 2, // opposite you
-    EAST:  1  // player to your left
+    USER: 0,      // Bottom - always the joining player
+    RIGHT: 1,     // Right side
+    TOP: 2,       // Top
+    LEFT: 3       // Left side
   });
 
-  /** DOMINICAN TURN ORDER: Counter-clockwise [0,3,2,1] */
+  /** COUNTER-CLOCKWISE TURN ORDER from user's perspective: [0,3,2,1] */
   const SEAT_ORDER = Object.freeze([0, 3, 2, 1]);
 
-  /** Every seat belongs to team 0 or 1 (partners are 2 apart). */
-  const TEAM_OF_SEAT = (seat) => seat % 2;          // 0,2 → team‑0; 1,3 → team‑1
+  /** Teams: 0&2 vs 1&3 (partners sit opposite) */
+  const TEAM_OF_SEAT = (seat) => seat % 2;
 
   /* ----------------------------------------------------------------- */
-  /* GAME FLOW -------------------------------------------------------- */
+  /* GAME FLOW - CORRECTED DOMINICAN RULES --------------------------- */
   /* ----------------------------------------------------------------- */
-  const FIRST_TILE = Object.freeze([6, 6]);         // Double‑six must start first round
+  const FIRST_TILE = Object.freeze([6, 6]);         // Double‑six for first game only
   const HAND_SIZE  = 7;                             // Classic 4‑player dominoes
-  const WINNING_SCORE = 100;                        // Points cap
+  const WINNING_SCORE = 100;                        // Points to win match
+
+  /* ----------------------------------------------------------------- */
+  /* GAME PHASES ------------------------------------------------------ */
+  /* ----------------------------------------------------------------- */
+  const GAME_PHASES = Object.freeze({
+    FIRST_GAME: 'firstGame',        // Very first game - requires [6|6]
+    NORMAL_ROUND: 'normalRound',    // Subsequent rounds - winner starts with any tile
+    MATCH_OVER: 'matchOver'         // Match finished
+  });
 
   /* ----------------------------------------------------------------- */
   /* DOMINICAN SCORING SYSTEM ---------------------------------------- */
@@ -70,17 +87,6 @@
   });
 
   /* ----------------------------------------------------------------- */
-  /* GAME STATES ------------------------------------------------------ */
-  /* ----------------------------------------------------------------- */
-  const GAME_STATES = Object.freeze({
-    WAITING: 'waiting',
-    ACTIVE: 'active',
-    ROUND_ENDED: 'roundEnded',
-    GAME_OVER: 'gameOver',
-    TRANCA: 'tranca'  // Blocked board
-  });
-
-  /* ----------------------------------------------------------------- */
   /* ROUND END REASONS ------------------------------------------------ */
   /* ----------------------------------------------------------------- */
   const END_REASONS = Object.freeze({
@@ -91,32 +97,19 @@
     CAPICU_PASO: 'capicu_paso'  // Domino with both bonuses
   });
 
-  /* Socket / event names (single source) */
-  const EVENTS = Object.freeze({
-    SERVER: {
-      FIND_ROOM:     'findRoom',
-      PLAY_TILE:     'playTile',
-      PASS_TURN:     'passTurn'
-    },
-    CLIENT: {
-      ROOM_JOINED:   'roomJoined',
-      LOBBY_UPDATE:  'lobbyUpdate',
-      GAME_STATE:    'gameState'
-    }
-  });
-
   /* ----------------------------------------------------------------- */
-  /* HELPER FUNCTIONS ------------------------------------------------- */
+  /* HELPER FUNCTIONS - COUNTER-CLOCKWISE TURN ORDER ----------------- */
   /* ----------------------------------------------------------------- */
   
-  /** Get next seat in Dominican counter-clockwise order */
+  /** Get next seat in counter-clockwise order: 0->3->2->1->0 */
   const nextSeat = (currentSeat) => {
     const currentIndex = SEAT_ORDER.indexOf(currentSeat);
     const nextIndex = (currentIndex + 1) % SEAT_ORDER.length;
     return SEAT_ORDER[nextIndex];
-  };
+    };
+  });
 
-  /** Get previous seat in Dominican counter-clockwise order */
+  /** Get previous seat in counter-clockwise order: 0->1->2->3->0 */
   const prevSeat = (currentSeat) => {
     const currentIndex = SEAT_ORDER.indexOf(currentSeat);
     const prevIndex = (currentIndex - 1 + SEAT_ORDER.length) % SEAT_ORDER.length;
@@ -132,27 +125,13 @@
     return hand.reduce((sum, tile) => sum + tile[0] + tile[1], 0);
   };
 
-  /* ----------------------------------------------------------------- */
-  /* PUBLIC API ------------------------------------------------------- */
-  /* ----------------------------------------------------------------- */
-  return Object.freeze({
-    MAX_PIPS,
-    DOMINO_SET,
-    SEATS,
-    SEAT_ORDER,
-    TEAM_OF_SEAT,
-    FIRST_TILE,
-    HAND_SIZE,
-    WINNING_SCORE,
-    SCORING,
-    GAME_STATES,
-    END_REASONS,
-    EVENTS,
-    
-    // Helper functions
-    nextSeat,
-    prevSeat,
-    isDouble,
-    calculatePips
-  });
-});
+  /** Get seat position name for UI */
+  const getSeatPosition = (seat) => {
+    const positions = {
+      0: 'Bottom (You)',
+      1: 'Right', 
+      2: 'Top',
+      3: 'Left'
+    };
+    return positions[seat] || 'Unknown';
+  };

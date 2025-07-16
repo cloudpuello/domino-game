@@ -1,12 +1,11 @@
 /* =====================================================================
- * server/server.js — Dominican Domino Server
+ * server/server.js — Dominican Domino Server (CORRECT RULES & UX)
  *
- * IMPLEMENTS PROPER DOMINICAN RULES:
+ * IMPLEMENTS PROPER DOMINICAN RULES & UX:
+ * - User always gets seat 0 (bottom of screen)
  * - Counter-clockwise turn order [0,3,2,1]
- * - First round must start with [6|6]
- * - Proper pass handling (no drawing)
- * - Capicú, Paso, and tranca scoring
- * - Right-hand block bonuses
+ * - Only first game of first match requires [6|6]
+ * - Subsequent rounds: winner starts with any tile
  * =================================================================== */
 
 const express = require('express');
@@ -44,7 +43,13 @@ app.use(express.static(path.join(__dirname, '../public')));
 app.use('/shared', express.static(path.join(__dirname, '../shared')));
 
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', rules: 'dominican', timestamp: new Date().toISOString() });
+  res.json({ 
+    status: 'ok', 
+    rules: 'dominican-correct', 
+    turnOrder: 'counter-clockwise',
+    userSeat: 'always-bottom',
+    timestamp: new Date().toISOString() 
+  });
 });
 
 app.get('/', (req, res) => {
@@ -57,7 +62,7 @@ app.get('/', (req, res) => {
 const gameRooms = new Map();
 
 // ────────────────────────────────────────────────────────────────────────
-// Dominican Game Room Class
+// Dominican Game Room Class - FIXED UX
 // ────────────────────────────────────────────────────────────────────────
 class DominicanGameRoom {
   constructor(roomId) {
@@ -65,8 +70,9 @@ class DominicanGameRoom {
     this.players = {};
     this.scores = [0, 0];
     this.isGameActive = false;
-    this.isFirstRound = true;
+    this.gamePhase = GC.GAME_PHASES.FIRST_GAME;  // Start with first game
     this.lastWinnerSeat = null;
+    this.gamesPlayed = 0;
     
     // Dominican game state
     this.board = [];
@@ -106,21 +112,44 @@ class DominicanGameRoom {
       }));
   }
 
-  findEmptySeat() {
-    for (let i = 0; i < 4; i++) {
+  // FIXED: User always gets seat 0, others fill in order
+  findSeatForNewPlayer() {
+    // Always try to give new players seat 0 first (bottom/user position)
+    if (!this.players[0]) return 0;
+    
+    // Then fill other seats in order
+    for (let i = 1; i < 4; i++) {
       if (!this.players[i]) return i;
     }
-    return -1;
+    
+    return -1; // Room full
   }
 
   findPlayerBySocket(socketId) {
     return Object.values(this.players).find(p => p && p.socketId === socketId);
   }
 
-  // Dominican turn order: counter-clockwise [0,3,2,1]
+  // Counter-clockwise turn order: 0->3->2->1->0
   nextTurn() {
     this.turn = GC.nextSeat(this.turn);
-    this.passCount = 0; // Reset pass count when turn advances normally
+    this.passCount = 0;
+  }
+
+  // Check if this is the very first game
+  isFirstGame() {
+    return this.gamePhase === GC.GAME_PHASES.FIRST_GAME;
+  }
+
+  // Move to next game phase
+  nextGamePhase() {
+    if (this.gamePhase === GC.GAME_PHASES.FIRST_GAME) {
+      this.gamePhase = GC.GAME_PHASES.NORMAL_ROUND;
+      this.gamesPlayed++;
+      console.log(`[Dominican Room] Moving to normal rounds after first game`);
+    } else {
+      this.gamesPlayed++;
+      console.log(`[Dominican Room] Game ${this.gamesPlayed} completed`);
+    }
   }
 }
 
@@ -130,7 +159,7 @@ class DominicanGameRoom {
 io.on('connection', (socket) => {
   console.log(`[Dominican Server] New connection: ${socket.id}`);
 
-  // Handle room finding/joining
+  // Handle room finding/joining with UX-friendly seating
   socket.on('findRoom', ({ playerName, roomId, reconnectSeat }) => {
     console.log(`[Dominican Server] ${playerName} looking for room...`);
     
@@ -153,7 +182,12 @@ io.on('connection', (socket) => {
         }
       }
 
-      const assignedSeat = reconnectSeat ?? targetRoom.findEmptySeat();
+      // FIXED: Assign seat with user-friendly logic
+      let assignedSeat = reconnectSeat;
+      if (assignedSeat === null || assignedSeat === undefined) {
+        assignedSeat = targetRoom.findSeatForNewPlayer();
+      }
+      
       if (assignedSeat === -1) {
         socket.emit('errorMessage', 'Room is full');
         return;
@@ -175,15 +209,18 @@ io.on('connection', (socket) => {
         roomId: targetRoom.id,
         seat: assignedSeat,
         playerName: playerName,
-        gameRules: 'dominican'
+        gameRules: 'dominican-correct',
+        turnOrder: 'counter-clockwise',
+        seatPosition: GC.getSeatPosition(assignedSeat)
       });
 
       io.to(targetRoom.id).emit('lobbyUpdate', {
         players: targetRoom.getPlayerList(),
-        gameRules: 'dominican'
+        gameRules: 'dominican-correct',
+        turnOrder: 'counter-clockwise'
       });
 
-      console.log(`[Dominican Server] ${playerName} joined room ${targetRoom.id} as seat ${assignedSeat}`);
+      console.log(`[Dominican Server] ${playerName} joined room ${targetRoom.id} as seat ${assignedSeat} (${GC.getSeatPosition(assignedSeat)})`);
 
       // Auto-start when full
       if (targetRoom.isFull()) {
@@ -196,7 +233,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Handle Dominican tile play
+  // Handle Dominican tile play with correct rules
   socket.on('playTile', ({ roomId, seat, tile, side }) => {
     console.log(`[Dominican Server] Player ${seat} attempting to play [${tile}] on ${side}`);
     
@@ -207,7 +244,7 @@ io.on('connection', (socket) => {
         return;
       }
 
-      // CRITICAL: Verify it's actually this player's turn
+      // Verify it's this player's turn
       if (room.turn !== seat) {
         console.log(`[Dominican Server] Not player ${seat}'s turn (current turn: ${room.turn})`);
         socket.emit('errorMessage', `Not your turn. Current turn: ${room.turn}`);
@@ -231,27 +268,28 @@ io.on('connection', (socket) => {
         return;
       }
 
-      // FIRST MOVE VALIDATION: First round must be [6|6]
+      // FIRST GAME VALIDATION: Only first game requires [6|6]
       if (room.board.length === 0) {
-        console.log(`[Dominican Server] First move validation. Is first round: ${room.isFirstRound}`);
+        console.log(`[Dominican Server] First move validation. Is first game: ${room.isFirstGame()}`);
         
-        if (room.isFirstRound) {
+        if (room.isFirstGame()) {
           if (tile[0] !== 6 || tile[1] !== 6) {
-            console.log(`[Dominican Server] First round requires [6|6], got [${tile}]`);
-            socket.emit('errorMessage', 'First round must start with [6|6]');
+            console.log(`[Dominican Server] First game requires [6|6], got [${tile}]`);
+            socket.emit('errorMessage', 'First game must start with [6|6]');
             return;
           }
           
-          // CRITICAL: Double-check that this player should actually have [6|6]
+          // Double-check that this player actually has [6|6]
           const actuallyHasDoubleSix = player.hand.some(t => t[0] === 6 && t[1] === 6);
           if (!actuallyHasDoubleSix) {
             console.error(`[Dominican Server] CRITICAL ERROR: Player ${seat} trying to play [6|6] but doesn't have it!`);
-            console.error(`[Dominican Server] Player ${seat} hand:`, player.hand);
             socket.emit('errorMessage', 'Server error: You don\'t actually have [6|6]');
             return;
           }
           
-          console.log(`[Dominican Server] ✓ Valid first move: [6|6] by player ${seat}`);
+          console.log(`[Dominican Server] ✓ Valid first game move: [6|6] by player ${seat}`);
+        } else {
+          console.log(`[Dominican Server] ✓ Normal round: Player ${seat} can start with [${tile}]`);
         }
       }
 
@@ -271,10 +309,10 @@ io.on('connection', (socket) => {
         if (roundResult.ended) {
           endDominicanRound(room, roundResult);
         } else {
-          // Advance turn in Dominican counter-clockwise order
+          // Advance turn in counter-clockwise order
           room.nextTurn();
           io.to(roomId).emit('turnChanged', room.turn);
-          console.log(`[Dominican Server] Turn advanced to seat ${room.turn}`);
+          console.log(`[Dominican Server] Turn advanced to seat ${room.turn} (${GC.getSeatPosition(room.turn)})`);
         }
 
       } else {
@@ -287,9 +325,9 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Handle Dominican pass (no drawing)
+  // Handle Dominican pass
   socket.on('passPlay', ({ roomId, seat }) => {
-    console.log(`[Dominican Server] Player ${seat} passing (Dominican rules)`);
+    console.log(`[Dominican Server] Player ${seat} passing`);
     
     try {
       const room = gameRooms.get(roomId);
@@ -298,24 +336,19 @@ io.on('connection', (socket) => {
         return;
       }
 
-      // Handle pass with Dominican rules
       const passResult = GameEngine.handlePass(room, seat);
       
-      // Notify all players of pass
       io.to(roomId).emit('playerPassed', { 
         seat,
         passCount: room.passCount,
-        gameRules: 'dominican'
+        gameRules: 'dominican-correct'
       });
       
       if (passResult.tranca) {
-        // Tranca detected - blocked board
         console.log(`[Dominican Server] Tranca detected in room ${roomId}`);
-        
         const roundResult = GameEngine.checkRoundEnd(room);
         endDominicanRound(room, roundResult);
       } else {
-        // Continue game - advance turn
         room.nextTurn();
         io.to(roomId).emit('turnChanged', room.turn);
         console.log(`[Dominican Server] Pass processed, turn advanced to seat ${room.turn}`);
@@ -347,7 +380,7 @@ io.on('connection', (socket) => {
         
         io.to(room.id).emit('lobbyUpdate', {
           players: room.getPlayerList(),
-          gameRules: 'dominican'
+          gameRules: 'dominican-correct'
         });
         
         console.log(`[Dominican Server] ${player.name} disconnected from room ${room.id}`);
@@ -358,7 +391,7 @@ io.on('connection', (socket) => {
 });
 
 // ────────────────────────────────────────────────────────────────────────
-// Dominican Game Lifecycle
+// Dominican Game Lifecycle - FIXED RULES
 // ────────────────────────────────────────────────────────────────────────
 
 function startDominicanGame(room) {
@@ -366,16 +399,17 @@ function startDominicanGame(room) {
     if (!room.isFull()) return;
 
     console.log(`[Dominican Server] Starting Dominican game in room ${room.id}`);
-    console.log(`[Dominican Server] Is first round: ${room.isFirstRound}`);
+    console.log(`[Dominican Server] Game phase: ${room.gamePhase}`);
+    console.log(`[Dominican Server] Is first game: ${room.isFirstGame()}`);
     
     room.isGameActive = true;
     room.gameState = GC.GAME_STATES.ACTIVE;
     
-    // Initialize round with Dominican rules
+    // Initialize round with correct rules
     GameEngine.initNewRound(room, io);
     
     console.log(`[Dominican Server] Dominican game started in room ${room.id}`);
-    console.log(`[Dominican Server] Current turn: ${room.turn}`);
+    console.log(`[Dominican Server] Current turn: ${room.turn} (${GC.getSeatPosition(room.turn)})`);
 
   } catch (error) {
     console.error('[Dominican Server] Error starting game:', error);
@@ -390,6 +424,9 @@ function endDominicanRound(room, roundResult) {
     room.isGameActive = false;
     room.gameState = GC.GAME_STATES.ROUND_ENDED;
     room.lastWinnerSeat = roundResult.winner;
+    
+    // Move to next game phase
+    room.nextGamePhase();
     
     // Award points to winning team
     const winningTeam = GC.TEAM_OF_SEAT(roundResult.winner);
@@ -413,7 +450,9 @@ function endDominicanRound(room, roundResult) {
       boardState: [...room.board],
       finalHandSizes,
       details: roundResult.details,
-      gameRules: 'dominican'
+      gameRules: 'dominican-correct',
+      gamePhase: room.gamePhase,
+      nextStarter: roundResult.winner
     });
     
     // Check for game over
@@ -424,14 +463,15 @@ function endDominicanRound(room, roundResult) {
         io.to(room.id).emit('gameOver', {
           winningTeam,
           scores: [...room.scores],
-          gameRules: 'dominican'
+          gameRules: 'dominican-correct',
+          totalGames: room.gamesPlayed
         });
         
         gameRooms.delete(room.id);
         console.log(`[Dominican Server] Dominican game over - Team ${winningTeam} wins!`);
       }, 2000);
     } else {
-      // Start new round
+      // Start new round with winner
       setTimeout(() => {
         if (gameRooms.has(room.id)) {
           startDominicanGame(room);
@@ -450,18 +490,21 @@ function endDominicanRound(room, roundResult) {
 // ────────────────────────────────────────────────────────────────────────
 server.listen(PORT, () => {
   console.log('='.repeat(70));
-  console.log(`🇩🇴 DOMINICAN DOMINO SERVER STARTED`);
+  console.log(`🇩🇴 DOMINICAN DOMINO SERVER (CORRECT RULES & UX)`);
   console.log(`🌐 Port: ${PORT}`);
-  console.log(`🎮 Game Rules: Dominican (Counter-clockwise)`);
-  console.log(`🎯 Turn Order: [0,3,2,1]`);
+  console.log(`🎮 Game Rules: Dominican (CORRECTED)`);
+  console.log(`🎯 Turn Order: Counter-clockwise [0,3,2,1]`);
+  console.log(`👤 User Seat: Always bottom (seat 0)`);
+  console.log(`🎲 [6|6] Rule: Only first game of first match`);
+  console.log(`🏆 Subsequent: Winner starts with any tile`);
   console.log(`🔗 URL: http://localhost:${PORT}`);
   console.log('='.repeat(70));
   
-  console.log('📋 Dominican Rules Active:');
-  console.log('   • First round: Must start with [6|6]');
-  console.log('   • Subsequent rounds: Winner opens with any tile');
-  console.log('   • Turn order: Counter-clockwise [0,3,2,1]');
-  console.log('   • Scoring: Capicú (+30), Paso (+30), Tranca');
+  console.log('📋 Corrected Dominican Rules:');
+  console.log('   • User always sits at bottom of screen (seat 0)');
+  console.log('   • Counter-clockwise turns: 0->3->2->1->0');
+  console.log('   • First game only: Must start with [6|6]');
+  console.log('   • Subsequent rounds: Winner starts with any tile');
   console.log('   • No drawing - pass if cannot play');
   console.log('');
   console.log('🎮 Ready for Dominican Domino!');

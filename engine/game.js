@@ -1,387 +1,538 @@
 /* =====================================================================
- * engine/game.js - Dominican Domino Game Engine
+ * src/game/gameManager.js — Dominican Domino Game Manager (CORRECT RULES)
  *
- * IMPLEMENTS PROPER DOMINICAN RULES:
- * - Counter-clockwise turn order
- * - First round must start with [6|6]
- * - Subsequent rounds winner opens with any tile
- * - Capicú, Paso, and right-hand block bonuses
- * - Proper tranca (blocked board) detection
+ * IMPLEMENTS CORRECT DOMINICAN RULES ON CLIENT:
+ * - User always at bottom (seat 0)
+ * - Counter-clockwise turn order [0,3,2,1]
+ * - Only first game requires [6|6]
+ * - Subsequent rounds: winner starts with any tile
  * =================================================================== */
 
-const { dealHands } = require('./utils');
-const GC = require('../shared/constants/gameConstants');
-const DU = require('../shared/utils/dominoUtils');
+const GameManager = {
+  autoPassTimer: null,
+  gameRules: 'dominican-correct',
 
-/* ────────────────────────────────────────────────────────────────────────
- * Core Game Functions
- * ────────────────────────────────────────────────────────────────────── */
+  init() {
+    console.log('GameManager: Initializing Dominican Domino client (CORRECT RULES)');
 
-/**
- * Validates and places a tile on the board following Dominican rules
- */
-function placeTile(room, tile, sideHint) {
-  console.log(`[Dominican Engine] Player ${room.turn} attempting to place [${tile}] on ${sideHint}`);
-  
-  // First move validation
-  if (room.board.length === 0) {
-    // First round: Must be [6|6]
-    if (room.isFirstRound && !DU.sameTile(tile, GC.FIRST_TILE)) {
-      console.log(`[Dominican Engine] First round requires [${GC.FIRST_TILE}], got [${tile}]`);
-      return false;
+    if (!window.socket) {
+      console.error('GameManager: Socket not available');
+      return;
+    }
+    this.setupSocketListeners();
+  },
+
+  setupSocketListeners() {
+    const events = [
+      'roundStart', 'updateHand', 'broadcastMove', 'turnChanged',
+      'playerPassed', 'roundEnded', 'gameOver', 'errorMessage'
+    ];
+
+    events.forEach(event => {
+      const handler = this[`handle${event.charAt(0).toUpperCase() + event.slice(1)}`];
+      if (handler) {
+        window.socket.on(event, handler.bind(this));
+      }
+    });
+  },
+
+  /**
+   * Handle round start with correct Dominican rules
+   */
+  handleRoundStart(data) {
+    console.log('GameManager: Dominican round starting (CORRECT RULES)', data);
+    
+    // Clear any existing timers
+    this.clearAutoPassTimer();
+
+    // Hide lobby and show game
+    if (UIManager.showLobby) {
+      UIManager.showLobby(false);
+    }
+
+    // Reset and update game state
+    GameState.reset();
+    GameState.isGameActive = true;
+    GameState.gameRules = 'dominican-correct';
+    GameState.gamePhase = data.gamePhase || 'firstGame';
+    GameState.isFirstGame = data.isFirstGame || false;
+    
+    // Update hand
+    if (data.yourHand && data.yourHand.length > 0) {
+      GameState.updateMyHand(data.yourHand);
+      console.log(`GameManager: Received hand with ${data.yourHand.length} tiles:`, data.yourHand);
+    } else {
+      console.error('GameManager: No hand received in roundStart!');
     }
     
-    // Subsequent rounds: Winner can play any tile
-    room.board.push([...tile]);
-    room.leftEnd = tile[0];
-    room.rightEnd = tile[1];
-    room.lastPlayedTile = tile;
-    room.lastPlayedSeat = room.turn;
+    // Update game state
+    GameState.setCurrentTurn(data.startingSeat);
+    GameState.updateScores(data.scores);
     
-    // IMPORTANT: Only reset first round flag after successful first move
-    if (room.isFirstRound) {
-      room.isFirstRound = false;
-      console.log(`[Dominican Engine] First round flag reset after successful [6|6] placement`);
+    // Update hand sizes
+    if (data.handSizes) {
+      GameState.syncHandSizes(data.handSizes);
     }
     
-    console.log(`[Dominican Engine] Opening tile [${tile}] placed`);
-    return true;
-  }
-
-  // Regular move validation
-  const playableSides = DU.playableSides(tile, room.board);
-  if (playableSides.length === 0) {
-    console.log(`[Dominican Engine] Tile [${tile}] not playable on current board`);
-    return false;
-  }
-
-  // Determine side
-  const side = sideHint || (playableSides.length === 1 ? playableSides[0] : null);
-  if (!side) {
-    console.warn(`[Dominican Engine] Ambiguous play for tile [${tile}] without side hint`);
-    return false;
-  }
-
-  // Place tile
-  const valueToMatch = (side === 'left') ? room.leftEnd : room.rightEnd;
-  const finalTile = _orientTile(tile, valueToMatch, side);
-
-  if (side === 'left') {
-    room.board.unshift(finalTile);
-    room.leftEnd = finalTile[0];
-  } else {
-    room.board.push(finalTile);
-    room.rightEnd = finalTile[1];
-  }
-
-  room.lastPlayedTile = tile;
-  room.lastPlayedSeat = room.turn;
-  room.passCount = 0; // Reset pass count on successful play
-  
-  console.log(`[Dominican Engine] Tile [${tile}] placed on ${side}, board now: ${room.board.length} tiles`);
-  return true;
-}
-
-/**
- * Initialize a new round following Dominican rules
- */
-function initNewRound(room, io) {
-  console.log(`[Dominican Engine] Starting new round for room ${room.id}`);
-  
-  _resetRoundState(room);
-  dealHands(room);
-  
-  // Determine opener
-  const opener = _determineOpener(room);
-  room.turn = opener;
-  room.turnStarter = opener;
-  
-  console.log(`[Dominican Engine] Round opener: Seat ${opener}`);
-  
-  _notifyPlayersRoundStart(room, io, opener);
-  io.in(room.id).emit('turnChanged', opener);
-}
-
-/**
- * Handle player pass - Dominican rules: no drawing, just pass
- */
-function handlePass(room, seat) {
-  console.log(`[Dominican Engine] Player ${seat} passed`);
-  
-  room.passCount++;
-  room.lastPassSeat = seat;
-  
-  // Check for tranca (blocked board)
-  if (room.passCount >= 4) {
-    console.log(`[Dominican Engine] Tranca detected - all players passed`);
-    return { tranca: true };
-  }
-  
-  return { tranca: false };
-}
-
-/**
- * Check if round is over and calculate scoring
- */
-function checkRoundEnd(room) {
-  const currentPlayer = room.players[room.turn];
-  
-  // Check if current player emptied their hand
-  if (currentPlayer && currentPlayer.hand.length === 0) {
-    console.log(`[Dominican Engine] Player ${room.turn} emptied their hand`);
+    // Clear messages and update displays
+    this.clearMessages();
+    this.updateAllDisplays();
     
-    const scoring = _calculateDominoScoring(room);
-    return {
-      ended: true,
-      reason: scoring.reason,
-      winner: room.turn,
-      points: scoring.points,
-      details: scoring.details
+    // Validate game phase logic
+    if (data.isFirstGame) {
+      this.validateFirstGameLogic(data.startingSeat);
+    } else {
+      this.validateSubsequentRoundLogic(data.startingSeat);
+    }
+    
+    // Set initial status
+    this.setInitialDominicanStatus(data.startingSeat, data.isFirstGame);
+    
+    // Add game-specific message
+    const gameMessage = data.isFirstGame ? 
+      '🎲 First game started! Must begin with [6|6]' : 
+      '🏆 New round! Winner starts with any tile';
+    UIManager.addMessage(gameMessage);
+    
+    // Show seat position info
+    if (data.yourSeatPosition) {
+      UIManager.addMessage(`You are seated at: ${data.yourSeatPosition}`);
+    }
+    
+    console.log('GameManager: Dominican round initialized successfully');
+  },
+
+  /**
+   * Validate first game logic - only first game requires [6|6]
+   */
+  validateFirstGameLogic(startingSeat) {
+    console.log('=== FIRST GAME VALIDATION ===');
+    
+    const myHand = GameState.myHand;
+    const hasDoubleSix = myHand.some(tile => tile[0] === 6 && tile[1] === 6);
+    const mySeat = GameState.mySeat;
+    
+    console.log(`My seat: ${mySeat} (should be 0 for user)`);
+    console.log(`Starting seat: ${startingSeat}`);
+    console.log(`I have [6|6]: ${hasDoubleSix}`);
+    console.log(`My hand:`, myHand);
+    
+    if (hasDoubleSix && startingSeat !== mySeat) {
+      console.error('❌ FIRST GAME ERROR: I have [6|6] but server chose someone else!');
+      UIManager.addMessage('❌ ERROR: I have [6|6] but it\'s not my turn!');
+      UIManager.showError('Server error: Wrong player chosen for first game');
+    } else if (!hasDoubleSix && startingSeat === mySeat) {
+      console.error('❌ FIRST GAME ERROR: Server chose me but I don\'t have [6|6]!');
+      UIManager.addMessage('❌ ERROR: It\'s my turn but I don\'t have [6|6]!');
+      UIManager.showError('Server error: You don\'t have [6|6] for first game');
+    } else if (hasDoubleSix && startingSeat === mySeat) {
+      console.log('✅ FIRST GAME SUCCESS: I have [6|6] and it\'s my turn');
+      UIManager.addMessage('✅ You have [6|6] and will start the first game');
+    } else {
+      console.log('⏳ FIRST GAME WAITING: I don\'t have [6|6], waiting for correct player');
+      UIManager.addMessage('⏳ Waiting for player with [6|6] to start first game');
+    }
+  },
+
+  /**
+   * Validate subsequent round logic - winner can start with any tile
+   */
+  validateSubsequentRoundLogic(startingSeat) {
+    console.log('=== SUBSEQUENT ROUND VALIDATION ===');
+    
+    const mySeat = GameState.mySeat;
+    const myHand = GameState.myHand;
+    
+    console.log(`My seat: ${mySeat}`);
+    console.log(`Starting seat: ${startingSeat}`);
+    console.log(`My hand size: ${myHand.length}`);
+    
+    if (startingSeat === mySeat) {
+      console.log('✅ SUBSEQUENT ROUND: I am the winner and can start with any tile');
+      UIManager.addMessage('✅ You won the previous round! Start with any tile');
+    } else {
+      console.log('⏳ SUBSEQUENT ROUND: Previous winner will start');
+      UIManager.addMessage('⏳ Previous winner will start the round');
+    }
+  },
+
+  handleUpdateHand(newHand) {
+    console.log('GameManager: Hand updated', newHand);
+    GameState.updateMyHand(newHand);
+    this.updateHandDisplays();
+  },
+
+  handleBroadcastMove(data) {
+    console.log('GameManager: Dominican move broadcast', data);
+    
+    // Update board state
+    GameState.updateBoard(data.boardState);
+    
+    // Update hand sizes
+    if (data.handSizes && data.seat !== GameState.mySeat) {
+      GameState.syncHandSizes(data.handSizes);
+    }
+    
+    // Update displays
+    this.updateAllDisplays();
+    
+    // Add move message
+    this.addDominicanMoveMessage(data);
+  },
+
+  handleTurnChanged(turn) {
+    console.log('GameManager: Dominican turn changed to', turn);
+    
+    this.clearAutoPassTimer();
+    GameState.setCurrentTurn(turn);
+
+    if (GameState.isMyTurn()) {
+      this.handleMyDominicanTurn();
+    } else {
+      this.handleOtherPlayerTurn(turn);
+    }
+
+    // Update hand display to show current player
+    this.updateHandDisplays();
+  },
+
+  handleMyDominicanTurn() {
+    console.log('GameManager: My Dominican turn');
+    
+    // Show basic status
+    UIManager.setStatus('Your turn! 🇩🇴');
+    
+    // Check for valid moves after a short delay
+    this.autoPassTimer = setTimeout(() => {
+      this.checkDominicanMoves();
+    }, 1000);
+  },
+
+  handleOtherPlayerTurn(turn) {
+    const playerName = this.getPlayerName(turn);
+    const turnOrder = this.getTurnOrderDescription(turn);
+    UIManager.setStatus(`${playerName}'s turn ${turnOrder} 🇩🇴`);
+  },
+
+  /**
+   * Get user-friendly turn order description
+   */
+  getTurnOrderDescription(seat) {
+    const positions = {
+      0: '(You)',
+      1: '(Right)',
+      2: '(Top)', 
+      3: '(Left)'
     };
-  }
-  
-  // Check for tranca
-  if (room.passCount >= 4) {
-    console.log(`[Dominican Engine] Tranca - blocked board`);
+    return positions[seat] || '';
+  },
+
+  /**
+   * Check for valid moves with correct Dominican rules
+   */
+  checkDominicanMoves() {
+    if (!GameState.isMyTurn()) {
+      console.log('GameManager: Not my turn, skipping move check');
+      return;
+    }
+
+    console.log('GameManager: Checking Dominican moves...');
+    console.log('GameManager: Board length:', GameState.boardState.length);
+    console.log('GameManager: Is first game:', GameState.isFirstGame);
+    console.log('GameManager: Game phase:', GameState.gamePhase);
+    console.log('GameManager: My hand:', GameState.myHand);
+
+    // For first game, only check if player has [6|6]
+    if (GameState.boardState.length === 0 && GameState.isFirstGame) {
+      const hasDoubleSix = GameState.myHand.some(tile => tile[0] === 6 && tile[1] === 6);
+      console.log(`GameManager: First game - checking for [6|6]: ${hasDoubleSix}`);
+      
+      if (hasDoubleSix) {
+        this.showDominicanPlayableOptions();
+        return;
+      } else {
+        // This should NEVER happen if opener detection works correctly
+        console.error('GameManager: ERROR - It\'s my turn in first game but I don\'t have [6|6]!');
+        UIManager.addMessage('ERROR: Turn order problem - I don\'t have [6|6] for first game!');
+        return;
+      }
+    }
+
+    // For subsequent rounds or regular moves, check normal playability
+    const hasPlayableTiles = GameState.hasPlayableTiles();
+    console.log(`GameManager: Has playable tiles: ${hasPlayableTiles}`);
     
-    const scoring = _calculateTrancaScoring(room);
-    return {
-      ended: true,
-      reason: GC.END_REASONS.TRANCA,
-      winner: scoring.winner,
-      points: scoring.points,
-      details: scoring.details
-    };
-  }
-  
-  return { ended: false };
-}
-
-/**
- * Broadcast move to all players
- */
-function emitBroadcastMove(io, room, seat, tile) {
-  const handSizes = Object.fromEntries(
-    Object.entries(room.players)
-      .filter(([, player]) => player)
-      .map(([s, p]) => [s, p.hand.length])
-  );
-
-  console.log(`[Dominican Engine] Broadcasting move: Player ${seat} played [${tile}]`);
-
-  io.in(room.id).emit('broadcastMove', {
-    seat,
-    tile,
-    boardState: room.board,
-    handSizes,
-    leftEnd: room.leftEnd,
-    rightEnd: room.rightEnd
-  });
-}
-
-/* ────────────────────────────────────────────────────────────────────────
- * Private Helper Functions
- * ────────────────────────────────────────────────────────────────────── */
-
-function _resetRoundState(room) {
-  Object.assign(room, {
-    board: [],
-    leftEnd: null,
-    rightEnd: null,
-    turn: null,
-    turnStarter: null,
-    lastPlayedTile: null,
-    lastPlayedSeat: null,
-    lastPassSeat: null,
-    passCount: 0,
-    isRoundOver: false,
-  });
-}
-
-function _orientTile(tile, valueToMatch, side) {
-  if (side === 'left') {
-    return (tile[0] === valueToMatch) ? DU.flipped(tile) : [...tile];
-  } else {
-    return (tile[1] === valueToMatch) ? DU.flipped(tile) : [...tile];
-  }
-}
-
-function _determineOpener(room) {
-  if (room.isFirstRound) {
-    // First round: Player with [6|6] must open
-    room.isFirstRound = false;
-    return _findPlayerWithOpeningTile(room);
-  } else {
-    // Subsequent rounds: Winner of previous round opens
-    return room.lastWinnerSeat ?? GC.SEAT_ORDER[0];
-  }
-}
-
-function _findPlayerWithOpeningTile(room) {
-  for (const [seatStr, player] of Object.entries(room.players)) {
-    if (player && player.hand && player.hand.some(tile => DU.sameTile(tile, GC.FIRST_TILE))) {
-      return Number(seatStr);
+    if (!hasPlayableTiles) {
+      this.initiateDominicanAutoPass();
+    } else {
+      this.showDominicanPlayableOptions();
     }
-  }
-  return GC.SEAT_ORDER[0]; // Fallback
-}
+  },
 
-function _notifyPlayersRoundStart(room, io, opener) {
-  const handSizes = Object.fromEntries(
-    Object.entries(room.players)
-      .filter(([, player]) => player)
-      .map(([seat, player]) => [seat, player.hand ? player.hand.length : 0])
-  );
+  initiateDominicanAutoPass() {
+    console.log('GameManager: Initiating Dominican auto-pass');
+    
+    UIManager.setStatus('🚫 No valid moves - Auto-passing in 3 seconds... 🇩🇴');
+    UIManager.addMessage('No valid moves available - passing automatically');
 
-  console.log(`[Dominican Engine] Notifying players of round start. Opener: ${opener}`);
+    if (UIManager.showNotification) {
+      UIManager.showNotification('No valid moves! Passing automatically... 🇩🇴', 'warning', 3000);
+    }
 
-  Object.values(room.players).forEach(player => {
-    if (player && player.isConnected && player.hand) {
-      const payload = {
-        yourHand: player.hand,
-        startingSeat: opener,
-        scores: room.scores,
-        handSizes: handSizes,
-        isFirstRound: room.isFirstRound, // Pass the first round flag
-        gameRules: 'dominican'
-      };
+    this.autoPassTimer = setTimeout(() => {
+      if (GameState.isMyTurn()) {
+        this.executeDominicanPass();
+      }
+    }, 3000);
+  },
+
+  showDominicanPlayableOptions() {
+    const ends = GameState.getBoardEnds();
+    const isFirstGame = GameState.isFirstGame;
+    const boardEmpty = GameState.boardState.length === 0;
+    
+    if (boardEmpty) {
+      if (isFirstGame) {
+        UIManager.setStatus('Your turn! 🇩🇴 Play the double-six [6|6] (first game)');
+      } else {
+        UIManager.setStatus('Your turn! 🇩🇴 Play any tile (you won previous round)');
+      }
+    } else if (ends) {
+      UIManager.setStatus(`Your turn! 🇩🇴 Play on ${ends.left} or ${ends.right}`);
+    } else {
+      UIManager.setStatus('Your turn! 🇩🇴');
+    }
+  },
+
+  executeDominicanPass() {
+    console.log('GameManager: Executing Dominican pass');
+    
+    window.socket.emit('passPlay', {
+      roomId: GameState.roomId,
+      seat: GameState.mySeat
+    });
+    
+    UIManager.addMessage('You passed (no valid moves) 🇩🇴');
+  },
+
+  handlePlayerPassed(data) {
+    const playerName = this.getPlayerName(data.seat);
+    const turnOrder = this.getTurnOrderDescription(data.seat);
+    const passMessage = `${playerName} ${turnOrder} passed 🇩🇴`;
+    
+    if (data.passCount) {
+      UIManager.addMessage(`${passMessage} (${data.passCount}/4 passes)`);
+    } else {
+      UIManager.addMessage(passMessage);
+    }
+
+    if (data.seat === GameState.mySeat && UIManager.showNotification) {
+      UIManager.showNotification('You passed your turn 🇩🇴', 'info', 1500);
+    }
+  },
+
+  handleRoundEnded(data) {
+    console.log('GameManager: Dominican round ended', data);
+    
+    this.clearAutoPassTimer();
+    
+    // Update game state
+    GameState.updateBoard(data.boardState);
+    GameState.updateScores(data.scores);
+    GameState.syncHandSizes(data.finalHandSizes);
+    
+    // Update displays
+    this.updateAllDisplays();
+    
+    // Show results
+    this.showDominicanRoundResults(data);
+  },
+
+  handleGameOver(data) {
+    console.log('GameManager: Dominican game over', data);
+    
+    this.clearAutoPassTimer();
+    this.clearSession();
+    this.showDominicanGameOverResults(data);
+  },
+
+  handleErrorMessage(errorMessage) {
+    console.error('GameManager: Error received:', errorMessage);
+    if (UIManager.showError) {
+      UIManager.showError(`🇩🇴 ${errorMessage}`);
+    }
+  },
+
+  /* ----------------- DOMINICAN-SPECIFIC UTILITIES ----------------- */
+
+  setInitialDominicanStatus(startingSeat, isFirstGame) {
+    if (GameState.isMyTurn()) {
+      if (isFirstGame) {
+        UIManager.setStatus('Your turn! 🇩🇴 Play the double-six [6|6] (first game)');
+      } else {
+        UIManager.setStatus('Your turn! 🇩🇴 Play any tile (you won previous round)');
+      }
       
-      console.log(`[Dominican Engine] Sending roundStart to ${player.name} (seat ${player.seat}). First round: ${room.isFirstRound}`);
-      
-      io.to(player.socketId).emit('roundStart', payload);
+      // Check for moves after a delay
+      this.autoPassTimer = setTimeout(() => {
+        this.checkDominicanMoves();
+      }, 1000);
+    } else {
+      const playerName = this.getPlayerName(startingSeat);
+      const turnOrder = this.getTurnOrderDescription(startingSeat);
+      const statusMessage = isFirstGame ? 
+        `Waiting for ${playerName} ${turnOrder} to play [6|6]... 🇩🇴` :
+        `Waiting for ${playerName} ${turnOrder} to start... 🇩🇴`;
+      UIManager.setStatus(statusMessage);
     }
-  });
-}
+  },
 
-/**
- * Calculate scoring when a player empties their hand (domino)
- */
-function _calculateDominoScoring(room) {
-  const winner = room.turn;
-  const nextPlayer = GC.nextSeat(winner);
-  const lastTile = room.lastPlayedTile;
-  
-  // Calculate total pips in all hands
-  let totalPips = 0;
-  Object.values(room.players).forEach(player => {
-    if (player && player.hand) {
-      totalPips += GC.calculatePips(player.hand);
+  addDominicanMoveMessage(data) {
+    if (data.seat >= 0 && data.tile) {
+      const playerName = this.getPlayerName(data.seat);
+      const turnOrder = this.getTurnOrderDescription(data.seat);
+      const tile = `[${data.tile[0]}|${data.tile[1]}]`;
+      UIManager.addMessage(`${playerName} ${turnOrder} played ${tile} 🇩🇴`);
     }
-  });
-  
-  let bonus = 0;
-  let reason = GC.END_REASONS.DOMINO;
-  let details = [];
-  
-  // Check for Capicú (last tile connects both ends)
-  if (_isCapicu(room, lastTile)) {
-    bonus += GC.SCORING.CAPICU;
-    details.push('Capicú (+30)');
-  }
-  
-  // Check for Paso (no one can respond)
-  if (_isPaso(room, winner)) {
-    bonus += GC.SCORING.PASO;
-    details.push('Paso (+30)');
-  }
-  
-  // Update reason based on bonuses
-  if (bonus === GC.SCORING.CAPICU) {
-    reason = GC.END_REASONS.CAPICU;
-  } else if (bonus === GC.SCORING.PASO) {
-    reason = GC.END_REASONS.PASO;
-  } else if (bonus === GC.SCORING.CAPICU_PASO) {
-    reason = GC.END_REASONS.CAPICU_PASO;
-  }
-  
-  const totalPoints = totalPips + bonus;
-  
-  return {
-    reason,
-    points: totalPoints,
-    details: details.concat([`Pips: ${totalPips}`, `Bonus: ${bonus}`, `Total: ${totalPoints}`])
-  };
-}
+  },
 
-/**
- * Calculate scoring for tranca (blocked board)
- */
-function _calculateTrancaScoring(room) {
-  const lastPlayer = room.lastPlayedSeat;
-  const nextPlayer = GC.nextSeat(lastPlayer);
-  
-  // Calculate pip totals for each player
-  const pipTotals = {};
-  Object.values(room.players).forEach(player => {
-    if (player && player.hand) {
-      pipTotals[player.seat] = GC.calculatePips(player.hand);
+  showDominicanRoundResults(data) {
+    const winnerName = this.getPlayerName(data.winner);
+    const winnerTurnOrder = this.getTurnOrderDescription(data.winner);
+    const winnerTeam = data.winner % 2;
+    
+    let message = `🏆 ${winnerName} ${winnerTurnOrder} wins the round! 🇩🇴`;
+    
+    // Add reason-specific messaging
+    switch (data.reason) {
+      case 'capicu':
+        message += ' (Capicú!)';
+        break;
+      case 'paso':
+        message += ' (Paso!)';
+        break;
+      case 'capicu_paso':
+        message += ' (Capicú + Paso!)';
+        break;
+      case 'tranca':
+        message += ' (Tranca - blocked board)';
+        break;
     }
-  });
-  
-  const lastPlayerPips = pipTotals[lastPlayer] || 0;
-  const nextPlayerPips = pipTotals[nextPlayer] || 0;
-  
-  // Winner is the one with fewer pips
-  const winner = lastPlayerPips <= nextPlayerPips ? lastPlayer : nextPlayer;
-  
-  // Points = sum of all pips
-  const totalPips = Object.values(pipTotals).reduce((sum, pips) => sum + pips, 0);
-  
-  return {
-    winner,
-    points: totalPips,
-    details: [
-      `Tranca: ${lastPlayer} (${lastPlayerPips}) vs ${nextPlayer} (${nextPlayerPips})`,
-      `Winner: ${winner}`,
-      `Total pips: ${totalPips}`
-    ]
-  };
-}
+    
+    const scoreMessage = `+${data.points} points to Team ${winnerTeam + 1}`;
+    const totalMessage = `Scores: Team 1: ${data.scores[0]}, Team 2: ${data.scores[1]}`;
+    
+    UIManager.setStatus(message);
+    UIManager.addMessage(message);
+    UIManager.addMessage(scoreMessage);
+    UIManager.addMessage(totalMessage);
+    
+    // Show game phase info
+    if (data.gamePhase) {
+      const phaseMessage = data.gamePhase === 'firstGame' ? 
+        'Next: Normal rounds (winner starts)' : 
+        'Next: Winner starts with any tile';
+      UIManager.addMessage(phaseMessage);
+    }
+    
+    // Show details if available
+    if (data.details && data.details.length > 0) {
+      data.details.forEach(detail => UIManager.addMessage(`  ${detail}`));
+    }
+  },
 
-/**
- * Check if last play was Capicú (connects both ends)
- */
-function _isCapicu(room, tile) {
-  if (room.board.length < 2) return false;
-  
-  const leftEnd = room.leftEnd;
-  const rightEnd = room.rightEnd;
-  
-  // Capicú: last tile connects both ends and ends were different
-  return leftEnd !== rightEnd && tile.includes(leftEnd) && tile.includes(rightEnd);
-}
+  showDominicanGameOverResults(data) {
+    const message = `🎉 DOMINICAN DOMINO GAME OVER! 🇩🇴 Team ${data.winningTeam + 1} wins!`;
+    
+    UIManager.setStatus(message);
+    UIManager.addMessage(message);
+    UIManager.addMessage(`Final Scores - Team 1: ${data.scores[0]}, Team 2: ${data.scores[1]}`);
+    
+    if (data.totalGames) {
+      UIManager.addMessage(`Total games played: ${data.totalGames}`);
+    }
 
-/**
- * Check if last play was Paso (no one can respond)
- */
-function _isPaso(room, winner) {
-  const leftEnd = room.leftEnd;
-  const rightEnd = room.rightEnd;
-  
-  // Check if any other player can play
-  for (const [seat, player] of Object.entries(room.players)) {
-    if (Number(seat) !== winner && player && player.hand) {
-      const canPlay = player.hand.some(tile => 
-        tile.includes(leftEnd) || tile.includes(rightEnd)
+    setTimeout(() => {
+      const newGame = confirm(
+        `🇩🇴 DOMINICAN DOMINO GAME OVER! 🇩🇴\n\n${message}\n\nFinal Scores:\nTeam 1: ${data.scores[0]}\nTeam 2: ${data.scores[1]}\n\nTotal Games: ${data.totalGames || 'N/A'}\n\nStart a new Dominican game?`
       );
-      if (canPlay) return false;
-    }
-  }
-  
-  return true;
-}
+      if (newGame) {
+        location.reload();
+      }
+    }, 2000);
+  },
 
-/* ────────────────────────────────────────────────────────────────────────
- * Exports
- * ────────────────────────────────────────────────────────────────────── */
-module.exports = {
-  placeTile,
-  initNewRound,
-  handlePass,
-  checkRoundEnd,
-  emitBroadcastMove,
-  
-  // Dominican turn order helper
-  nextSeat: GC.nextSeat,
-  teamOf: GC.TEAM_OF_SEAT,
+  /* ----------------- STANDARD UTILITIES ----------------- */
+
+  clearAutoPassTimer() {
+    if (this.autoPassTimer) {
+      clearTimeout(this.autoPassTimer);
+      this.autoPassTimer = null;
+    }
+  },
+
+  clearMessages() {
+    const messagesElement = document.getElementById('messages');
+    if (messagesElement) {
+      messagesElement.innerHTML = '';
+    }
+  },
+
+  updateAllDisplays() {
+    // Update board
+    if (window.BoardRenderer && window.BoardRenderer.render) {
+      window.BoardRenderer.render();
+    }
+    
+    // Update hands
+    this.updateHandDisplays();
+    
+    // Update scores
+    if (UIManager.updateScores) {
+      UIManager.updateScores(GameState.scores);
+    }
+  },
+
+  updateHandDisplays() {
+    if (window.HandRenderer && window.HandRenderer.renderAll) {
+      window.HandRenderer.renderAll();
+    }
+  },
+
+  getPlayerName(seat) {
+    if (window.LobbyManager && window.LobbyManager.players) {
+      const player = window.LobbyManager.players.find(p => p && p.seat === seat);
+      return player ? player.name : `Seat ${seat}`;
+    }
+    return `Seat ${seat}`;
+  },
+
+  clearSession() {
+    sessionStorage.removeItem('domino_roomId');
+    sessionStorage.removeItem('domino_mySeat');
+  },
+
+  cleanup() {
+    this.clearAutoPassTimer();
+  },
+
+  getGameStatus() {
+    return {
+      gameRules: this.gameRules,
+      isGameActive: GameState.isGameActive,
+      gamePhase: GameState.gamePhase,
+      isFirstGame: GameState.isFirstGame,
+      currentTurn: GameState.currentTurn,
+      isMyTurn: GameState.isMyTurn(),
+      myHandSize: GameState.myHand ? GameState.myHand.length : 0,
+      boardSize: GameState.boardState ? GameState.boardState.length : 0,
+      scores: GameState.scores,
+      hasAutoPassTimer: !!this.autoPassTimer,
+      turnOrder: 'counter-clockwise [0,3,2,1]',
+      mySeat: GameState.mySeat,
+      userAlwaysAtBottom: true
+    };
+  }
 };
+
+window.GameManager = GameManager;

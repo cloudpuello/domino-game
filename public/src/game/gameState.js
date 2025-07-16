@@ -1,17 +1,18 @@
 /* =====================================================================
- * src/game/gameState.js — Dominican Domino Game State
+ * src/game/gameState.js — Dominican Domino Game State (CORRECT RULES)
  *
- * FIXED FOR DOMINICAN RULES:
- * - Counter-clockwise turn order
- * - Proper hand management
- * - Dominican-specific game state tracking
+ * IMPLEMENTS CORRECT DOMINICAN RULES:
+ * - User always at bottom (seat 0)
+ * - Counter-clockwise turn order [0,3,2,1]
+ * - Only first game requires [6|6]
+ * - Subsequent rounds: winner starts with any tile
  * =================================================================== */
 
-// Fallback for GameConstants in case it's not loaded yet
+// Fallback constants in case GameConstants not loaded
 const GC = window.GameConstants || { 
   MAX_PIPS: 6, 
   FIRST_TILE: [6, 6],
-  SEAT_ORDER: [0, 3, 2, 1], // Dominican counter-clockwise
+  SEAT_ORDER: [0, 3, 2, 1], // Counter-clockwise
   nextSeat: (seat) => {
     const order = [0, 3, 2, 1];
     const currentIndex = order.indexOf(seat);
@@ -25,7 +26,7 @@ const GameState = {
   /* ─ Room/session info ─ */
   roomId: null,
   mySeat: null,
-  gameRules: 'dominican',
+  gameRules: 'dominican-correct',
 
   /* ─ Round-specific state ─ */
   currentTurn: null,
@@ -40,13 +41,14 @@ const GameState = {
   handSizes: { 0: 0, 1: 0, 2: 0, 3: 0 },
 
   /* ─ Dominican-specific state ─ */
-  isFirstRound: true,
+  gamePhase: 'firstGame',
+  isFirstGame: false,
   lastPlayedTile: null,
   passCount: 0,
 
   /* ─ Init / reset ─ */
   init() { 
-    console.log('GameState: Initializing Dominican game state');
+    console.log('GameState: Initializing Dominican game state (CORRECT RULES)');
     this.reset(); 
   },
 
@@ -60,6 +62,8 @@ const GameState = {
       leftEnd: null,
       rightEnd: null,
       handSizes: { 0: 0, 1: 0, 2: 0, 3: 0 },
+      gamePhase: 'firstGame',
+      isFirstGame: false,
       lastPlayedTile: null,
       passCount: 0,
     });
@@ -70,6 +74,13 @@ const GameState = {
     this.roomId = roomId;
     this.mySeat = seat;
     console.log(`GameState: Room info set - Room: ${roomId}, Seat: ${seat}`);
+    
+    // Validate user is at bottom
+    if (seat === 0) {
+      console.log('GameState: ✓ User correctly seated at bottom (seat 0)');
+    } else {
+      console.warn(`GameState: ⚠️ User seated at ${seat}, should be 0 for best UX`);
+    }
   },
 
   /* ─ Core setters ─ */
@@ -80,7 +91,7 @@ const GameState = {
   
   setCurrentTurn(turn) { 
     this.currentTurn = turn;
-    console.log(`GameState: Current turn set to seat ${turn}`);
+    console.log(`GameState: Current turn set to seat ${turn} (${this.getSeatPosition(turn)})`);
   },
 
   updateMyHand(hand = []) {
@@ -99,7 +110,7 @@ const GameState = {
       this.leftEnd = null;
       this.rightEnd = null;
     } else {
-      // Calculate ends based on Dominican rules
+      // Calculate ends
       const ends = DU ? DU.boardEnds(board) : this.calculateBoardEnds(board);
       this.leftEnd = ends?.left ?? null;
       this.rightEnd = ends?.right ?? null;
@@ -108,7 +119,7 @@ const GameState = {
     console.log(`GameState: Board updated - ${board.length} tiles, ends: ${this.leftEnd}|${this.rightEnd}`);
   },
 
-  /** Fallback method to calculate board ends if DominoUtils not available */
+  /** Fallback method to calculate board ends */
   calculateBoardEnds(board) {
     if (!board || board.length === 0) return null;
     
@@ -121,7 +132,7 @@ const GameState = {
     };
   },
 
-  /** Merge server hand-size object, but keep my own seat authoritative */
+  /** Merge server hand-size object */
   syncHandSizes(serverSizes = {}) {
     this.handSizes = { ...this.handSizes, ...serverSizes };
     if (this.mySeat != null) {
@@ -139,7 +150,7 @@ const GameState = {
     return (this.leftEnd == null) ? null : { left: this.leftEnd, right: this.rightEnd }; 
   },
 
-  /* ─ Dominican-specific tile logic ─ */
+  /* ─ Dominican-specific tile logic with correct rules ─ */
   hasPlayableTiles() {
     if (!this.myHand || this.myHand.length === 0) {
       console.log('GameState: No tiles in hand');
@@ -148,21 +159,21 @@ const GameState = {
 
     // For empty board (first move)
     if (this.boardState.length === 0) {
-      // First round: Must have [6|6] - and if it's my turn, I should have it
-      if (this.isFirstRound) {
+      // First game: Must have [6|6] - and if it's my turn, I should have it
+      if (this.isFirstGame) {
         const hasFirstTile = this.myHand.some(tile => 
           tile[0] === 6 && tile[1] === 6
         );
-        console.log(`GameState: First round, checking for [6|6]: ${hasFirstTile}`);
+        console.log(`GameState: First game, checking for [6|6]: ${hasFirstTile}`);
         
-        // If it's my turn in first round, I MUST have [6|6]
+        // If it's my turn in first game, I MUST have [6|6]
         if (this.isMyTurn() && !hasFirstTile) {
-          console.error('GameState: ERROR - It\'s my turn in first round but I don\'t have [6|6]!');
+          console.error('GameState: ERROR - It\'s my turn in first game but I don\'t have [6|6]!');
         }
         
         return hasFirstTile;
       } else {
-        // Subsequent rounds: Can play any tile
+        // Subsequent rounds: Can play any tile (I'm the winner)
         console.log('GameState: Subsequent round, can play any tile');
         return this.myHand.length > 0;
       }
@@ -185,7 +196,7 @@ const GameState = {
 
     // Empty board logic
     if (this.boardState.length === 0) {
-      if (this.isFirstRound) {
+      if (this.isFirstGame) {
         return tile[0] === 6 && tile[1] === 6;
       } else {
         return true; // Any tile can open subsequent rounds
@@ -219,13 +230,13 @@ const GameState = {
     return sides;
   },
 
-  /* ─ Dominican turn order helpers ─ */
+  /* ─ Counter-clockwise turn order helpers ─ */
   getNextSeat(seat = this.currentTurn) {
     if (GC.nextSeat) {
       return GC.nextSeat(seat);
     }
     
-    // Fallback Dominican counter-clockwise order
+    // Fallback counter-clockwise order
     const order = [0, 3, 2, 1];
     const currentIndex = order.indexOf(seat);
     const nextIndex = (currentIndex + 1) % order.length;
@@ -236,12 +247,24 @@ const GameState = {
     return seat % 2; // 0,2 = Team 0; 1,3 = Team 1
   },
 
+  getSeatPosition(seat) {
+    const positions = {
+      0: 'Bottom (You)',
+      1: 'Right',
+      2: 'Top',
+      3: 'Left'
+    };
+    return positions[seat] || `Seat ${seat}`;
+  },
+
   /* ─ Debug helpers ─ */
   debugState() {
     const state = {
       roomId: this.roomId,
       mySeat: this.mySeat,
       gameRules: this.gameRules,
+      gamePhase: this.gamePhase,
+      isFirstGame: this.isFirstGame,
       currentTurn: this.currentTurn,
       isGameActive: this.isGameActive,
       myHandSize: this.myHand.length,
@@ -250,10 +273,12 @@ const GameState = {
       scores: this.scores,
       handSizes: this.handSizes,
       isMyTurn: this.isMyTurn(),
-      hasPlayableTiles: this.hasPlayableTiles()
+      hasPlayableTiles: this.hasPlayableTiles(),
+      turnOrder: 'counter-clockwise [0,3,2,1]',
+      seatPosition: this.getSeatPosition(this.mySeat)
     };
     
-    console.log('GameState Debug:', state);
+    console.log('GameState Debug (CORRECT RULES):', state);
     return state;
   },
 
@@ -265,6 +290,9 @@ const GameState = {
     if (this.mySeat === null) issues.push('No seat assigned');
     if (!this.myHand) issues.push('No hand array');
     if (!this.boardState) issues.push('No board state array');
+    
+    // UX validation
+    if (this.mySeat !== 0) issues.push('User not seated at bottom (seat 0)');
     
     if (issues.length > 0) {
       console.warn('GameState validation issues:', issues);
