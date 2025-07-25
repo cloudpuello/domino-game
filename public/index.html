@@ -3,226 +3,280 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dominican Domino</title>
-    <!-- FIXED: Correct CSS filename -->
-    <link rel="stylesheet" href="css/style.css">
+    <title>Dominican Domino - Connection Test</title>
     <style>
-        /* Additional styles for lobby and UI */
-        #lobbyContainer {
-            max-width: 600px;
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
             margin: 50px auto;
             padding: 20px;
             background: #f5f5f5;
-            border-radius: 10px;
-            text-align: center;
         }
-        
-        #lobbyList {
-            list-style: none;
-            padding: 0;
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .warning { background: #fff3cd; color: #856404; }
+        .info { background: #d1ecf1; color: #0c5460; }
+        #log {
+            background: #000;
+            color: #0f0;
+            padding: 15px;
+            height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            border-radius: 5px;
             margin: 20px 0;
         }
-        
-        #lobbyList li {
-            padding: 10px;
-            margin: 5px 0;
-            background: white;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-        }
-        
-        #ui-panel {
-            position: fixed;
-            top: 10px;
-            right: 10px;
-            width: 300px;
-            background: rgba(255, 255, 255, 0.95);
-            padding: 15px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            z-index: 1000;
-            max-height: 400px;
-            overflow-y: auto;
-        }
-        
-        .error-box {
-            background: #ffebee;
-            color: #c62828;
-            padding: 10px;
-            border-radius: 4px;
-            margin: 10px 0;
-            display: none;
-        }
-        
-        .message-log {
-            max-height: 150px;
-            overflow-y: auto;
-            background: #fafafa;
-            padding: 10px;
-            border-radius: 4px;
-            margin-top: 10px;
-        }
-        
-        .message-log div {
-            margin: 2px 0;
-            font-size: 12px;
-        }
-        
-        .log-time {
-            color: #666;
-            font-weight: bold;
-        }
-        
-        .current-player {
-            background: rgba(255, 215, 0, 0.3) !important;
-            border: 2px solid #ffd700 !important;
-        }
-        
-        .domino--back {
-            background: linear-gradient(135deg, #8B4513 0%, #A0522D 100%);
-            border: 2px solid #654321;
-        }
-        
         button {
-            padding: 10px 20px;
-            background: #4CAF50;
+            background: #007bff;
             color: white;
             border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 16px;
-        }
-        
-        button:disabled {
-            background: #cccccc;
-            cursor: not-allowed;
-        }
-        
-        button:hover:not(:disabled) {
-            background: #45a049;
-        }
-        
-        /* Notification styles */
-        .notification {
-            position: fixed;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
             padding: 10px 20px;
             border-radius: 5px;
-            color: white;
-            font-weight: bold;
-            z-index: 9999;
-            transition: opacity 0.3s ease;
+            cursor: pointer;
+            margin: 5px;
         }
-        
-        .notification--info {
-            background: #2196F3;
+        button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
         }
-        
-        .notification--warning {
-            background: #FF9800;
+        button:hover:not(:disabled) {
+            background: #0056b3;
         }
-        
-        .notification--error {
-            background: #F44336;
+        input {
+            padding: 8px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
         }
-        
-        .notification--out {
-            opacity: 0;
+        .test-section {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            background: white;
         }
     </style>
 </head>
 <body>
-    <!-- This container will hold either the lobby or the game -->
-    <div id="app-container">
-
-        <!-- Lobby View (Initially visible) -->
-        <div id="lobbyContainer" style="display: block;">
-            <h2>🎮 Dominican Domino</h2>
-            <p>Waiting for players to join...</p>
-            <ul id="lobbyList">
-                <!-- Player names will be injected here by LobbyManager -->
-            </ul>
-            <button id="startGameButton" disabled>Start Game</button>
-            <p><small>Game will start automatically when 4 players join</small></p>
-        </div>
-
-        <!-- Main Game View (Initially hidden) -->
-        <div id="gameView" style="display: none;">
-            <!-- UI Info Panel -->
-            <div id="ui-panel">
-                <h3>🎯 Game Info</h3>
-                <p id="playerInfo">You are Seat X (Team X)</p>
-                <p><strong>Status:</strong> <span id="status">Connecting...</span></p>
-                <div id="scores">
-                    <strong>Team 1:</strong> <span id="team0-score">0</span><br>
-                    <strong>Team 2:</strong> <span id="team1-score">0</span>
-                </div>
-                <div id="errors" class="error-box" style="display: none;"></div>
-                <h4>📋 Game Log</h4>
-                <div id="messages" class="message-log">
-                    <!-- Game messages will appear here -->
-                </div>
-            </div>
-
-            <!-- Main Game Area -->
-            <div id="game-container">
-                <!-- Top Player (Seat 2) -->
-                <div id="topPlayer" class="player-area vertical" data-seat="2">
-                    <div id="hand2" class="hand-container"></div>
-                </div>
-                
-                <!-- Left Player (Seat 1) -->
-                <div id="leftPlayer" class="player-area horizontal" data-seat="1">
-                    <div id="hand1" class="hand-container"></div>
-                </div>
-                
-                <!-- Game Board -->
-                <div id="board" class="board-container">
-                    <div style="text-align: center; color: rgba(255,255,255,0.7); font-size: 18px; margin-top: 40%;">
-                        Waiting for game to start...
-                    </div>
-                </div>
-                
-                <!-- Right Player (Seat 3) -->
-                <div id="rightPlayer" class="player-area horizontal" data-seat="3">
-                    <div id="hand3" class="hand-container"></div>
-                </div>
-                
-                <!-- Bottom Player (You - Seat 0) -->
-                <div id="bottomPlayer" class="player-area vertical" data-seat="0">
-                    <div id="hand0" class="hand-container"></div>
-                </div>
-            </div>
+    <h1>🇩🇴 Dominican Domino - Connection Test</h1>
+    
+    <div class="test-section">
+        <h3>Server Configuration</h3>
+        <label>Server URL: 
+            <input type="text" id="serverUrl" value="" placeholder="http://your-server:3000">
+        </label>
+        <button onclick="updateServer()">Update Server</button>
+        <div id="serverStatus" class="status info">
+            Ready to test connection
         </div>
     </div>
 
-    <!-- Load Scripts in correct order -->
+    <div class="test-section">
+        <h3>Connection Tests</h3>
+        <button onclick="testBasicConnection()">Test Basic HTTP</button>
+        <button onclick="testHealthEndpoint()">Test Health Endpoint</button>
+        <button onclick="testSocketConnection()">Test Socket.IO</button>
+        <button onclick="testGameFlow()">Test Game Flow</button>
+        <button onclick="clearLog()">Clear Log</button>
+    </div>
+
+    <div class="test-section">
+        <h3>Socket.IO Status</h3>
+        <div id="socketStatus" class="status warning">Not connected</div>
+        <div>
+            <strong>Socket ID:</strong> <span id="socketId">-</span><br>
+            <strong>Connected:</strong> <span id="connected">false</span><br>
+            <strong>Transport:</strong> <span id="transport">-</span>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h3>Test Log</h3>
+        <div id="log"></div>
+    </div>
+
     <script src="/socket.io/socket.io.js"></script>
-    <script src="shared/constants/gameConstants.js"></script>
-    <script src="shared/utils/dominoUtils.js"></script>
-    <script src="src/game/gameState.js"></script>
-    <script src="src/ui/uiManager.js"></script>
-    <script src="src/ui/boardRenderer.js"></script>
-    <script src="src/ui/handRenderer.js"></script>
-    <script src="src/game/dragDropManager.js"></script>
-    <script src="src/lobby/lobbyManager.js"></script>
-    <script src="src/game/gameManager.js"></script>
-    <script src="src/lobby/connectionManager.js"></script>
-    <script src="client.js"></script>
-    
     <script>
-        // Add start game button handler
-        document.addEventListener('DOMContentLoaded', () => {
-            const startButton = document.getElementById('startGameButton');
-            if (startButton) {
-                startButton.addEventListener('click', () => {
-                    if (window.socket && LobbyManager.currentRoom) {
-                        window.socket.emit('startGame', { roomId: LobbyManager.currentRoom });
-                    }
-                });
+        let socket = null;
+        let currentServer = window.location.origin;
+        
+        // Initialize
+        document.getElementById('serverUrl').value = currentServer;
+        log('🚀 Dominican Domino Connection Test Ready');
+        log(`📍 Default server: ${currentServer}`);
+
+        function log(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            const logDiv = document.getElementById('log');
+            logDiv.innerHTML += `[${timestamp}] ${message}\n`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(message);
+        }
+
+        function updateStatus(id, message, type = 'info') {
+            const element = document.getElementById(id);
+            element.textContent = message;
+            element.className = `status ${type}`;
+        }
+
+        function updateServer() {
+            const newServer = document.getElementById('serverUrl').value;
+            if (newServer && newServer !== currentServer) {
+                currentServer = newServer;
+                log(`🔄 Server updated to: ${currentServer}`);
+                updateStatus('serverStatus', `Server set to: ${currentServer}`, 'info');
+                
+                // Disconnect existing socket
+                if (socket) {
+                    socket.disconnect();
+                }
             }
+        }
+
+        async function testBasicConnection() {
+            log('🔗 Testing basic HTTP connection...');
+            
+            try {
+                const response = await fetch(currentServer + '/');
+                if (response.ok) {
+                    log('✅ Basic HTTP connection successful');
+                    updateStatus('serverStatus', 'HTTP connection successful', 'success');
+                    return true;
+                } else {
+                    log(`❌ HTTP connection failed: ${response.status} ${response.statusText}`);
+                    updateStatus('serverStatus', `HTTP failed: ${response.status}`, 'error');
+                    return false;
+                }
+            } catch (error) {
+                log(`❌ HTTP connection error: ${error.message}`);
+                updateStatus('serverStatus', `HTTP error: ${error.message}`, 'error');
+                return false;
+            }
+        }
+
+        async function testHealthEndpoint() {
+            log('🏥 Testing health endpoint...');
+            
+            try {
+                const response = await fetch(currentServer + '/health');
+                if (response.ok) {
+                    const health = await response.json();
+                    log('✅ Health endpoint successful');
+                    log(`📊 Status: ${health.status}`);
+                    log(`🎮 Game Engine: ${health.gameEngine ? 'Loaded' : 'Missing'}`);
+                    log(`📋 Game Constants: ${health.gameConstants ? 'Loaded' : 'Missing'}`);
+                    log(`🏠 Active Rooms: ${health.rooms || 0}`);
+                    updateStatus('serverStatus', 'Health check passed', 'success');
+                    return true;
+                } else {
+                    log(`❌ Health endpoint failed: ${response.status}`);
+                    updateStatus('serverStatus', `Health check failed: ${response.status}`, 'error');
+                    return false;
+                }
+            } catch (error) {
+                log(`❌ Health endpoint error: ${error.message}`);
+                updateStatus('serverStatus', `Health error: ${error.message}`, 'error');
+                return false;
+            }
+        }
+
+        function testSocketConnection() {
+            log('🔌 Testing Socket.IO connection...');
+            
+            if (socket) {
+                socket.disconnect();
+            }
+
+            try {
+                // Create new socket connection
+                socket = io(currentServer, {
+                    transports: ['websocket', 'polling'],
+                    timeout: 10000,
+                    forceNew: true
+                });
+
+                socket.on('connect', () => {
+                    log('✅ Socket.IO connected successfully!');
+                    updateStatus('socketStatus', 'Connected', 'success');
+                    updateSocketInfo();
+                });
+
+                socket.on('disconnect', (reason) => {
+                    log(`📴 Socket.IO disconnected: ${reason}`);
+                    updateStatus('socketStatus', `Disconnected: ${reason}`, 'warning');
+                    updateSocketInfo();
+                });
+
+                socket.on('connect_error', (error) => {
+                    log(`❌ Socket.IO connection error: ${error.message}`);
+                    updateStatus('socketStatus', `Connection error: ${error.message}`, 'error');
+                });
+
+                socket.on('connected', (data) => {
+                    log(`🎮 Server confirmation: ${JSON.stringify(data)}`);
+                });
+
+                // Test timeout
+                setTimeout(() => {
+                    if (!socket.connected) {
+                        log('⏰ Socket.IO connection timeout (10s)');
+                        updateStatus('socketStatus', 'Connection timeout', 'error');
+                    }
+                }, 10000);
+
+            } catch (error) {
+                log(`❌ Socket.IO setup error: ${error.message}`);
+                updateStatus('socketStatus', `Setup error: ${error.message}`, 'error');
+            }
+        }
+
+        function updateSocketInfo() {
+            document.getElementById('socketId').textContent = socket?.id || '-';
+            document.getElementById('connected').textContent = socket?.connected || false;
+            document.getElementById('transport').textContent = socket?.io?.engine?.transport?.name || '-';
+        }
+
+        function testGameFlow() {
+            if (!socket || !socket.connected) {
+                log('❌ Socket not connected - run Socket.IO test first');
+                return;
+            }
+
+            log('🎮 Testing Dominican game flow...');
+
+            // Test room joining
+            socket.emit('findRoom', {
+                playerName: 'TestPlayer_' + Date.now(),
+                roomId: null,
+                reconnectSeat: null
+            });
+
+            socket.on('roomJoined', (data) => {
+                log(`✅ Room joined: ${JSON.stringify(data)}`);
+            });
+
+            socket.on('lobbyUpdate', (data) => {
+                log(`📋 Lobby update: ${data.players?.length || 0} players`);
+            });
+
+            socket.on('errorMessage', (error) => {
+                log(`❌ Game error: ${error}`);
+            });
+        }
+
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+            log('🧹 Log cleared');
+        }
+
+        // Auto-test on load
+        window.addEventListener('load', () => {
+            setTimeout(testBasicConnection, 1000);
         });
     </script>
 </body>
