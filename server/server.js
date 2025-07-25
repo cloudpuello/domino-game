@@ -18,51 +18,64 @@ let GameEngine, GC;
 try {
   console.log('📦 Loading game modules...');
   
-  // Try different paths for game engine
-  try {
-    GameEngine = require('../engine/game');
-    console.log('✓ GameEngine loaded from ../engine/game');
-  } catch (e1) {
-    try {
-      GameEngine = require('./engine/game');
-      console.log('✓ GameEngine loaded from ./engine/game');
-    } catch (e2) {
-      console.error('✗ Could not load GameEngine from either path:');
-      console.error('  - ../engine/game:', e1.message);
-      console.error('  - ./engine/game:', e2.message);
-      throw new Error('GameEngine module not found');
-    }
-  }
+  // ────────────────────────────────────────────────────────────────────────
+// Temporary Module Loading - Get Server Running
+// ────────────────────────────────────────────────────────────────────────
+let GameEngine, GC;
 
-  // Try different paths for constants
-  try {
-    GC = require('../shared/constants/gameConstants');
-    console.log('✓ GameConstants loaded from ../shared/constants/gameConstants');
-  } catch (e1) {
-    try {
-      GC = require('./shared/constants/gameConstants');
-      console.log('✓ GameConstants loaded from ./shared/constants/gameConstants');
-    } catch (e2) {
-      console.error('✗ Could not load GameConstants from either path:');
-      console.error('  - ../shared/constants/gameConstants:', e1.message);
-      console.error('  - ./shared/constants/gameConstants:', e2.message);
-      throw new Error('GameConstants module not found');
-    }
-  }
+console.log('📦 Loading game modules...');
 
-  console.log('✓ All Dominican game modules loaded successfully');
+// Create a minimal game engine stub for now
+GameEngine = {
+  games: new Map(),
   
-} catch (error) {
-  console.error('❌ CRITICAL: Failed to load game modules');
-  console.error('Error:', error.message);
-  console.error('');
-  console.error('📂 Please check your file structure:');
-  console.error('   - engine/game.js exists');
-  console.error('   - shared/constants/gameConstants.js exists');
-  console.error('   - Paths are correct relative to server.js');
-  console.error('');
-  process.exit(1);
+  createRoom(roomId) {
+    const room = {
+      id: roomId,
+      players: {},
+      board: [],
+      scores: [0, 0],
+      currentTurn: null,
+      isGameActive: false
+    };
+    this.games.set(roomId, room);
+    return room;
+  },
+  
+  getRoom(roomId) {
+    return this.games.get(roomId);
+  },
+  
+  startGame(room) {
+    console.log(`[GameEngine Stub] Starting game in room ${room.id}`);
+    room.isGameActive = true;
+    
+    // For now, just return basic info
+    return {
+      success: true,
+      startingSeat: 0,
+      gamePhase: 'firstGame',
+      isFirstGame: true
+    };
+  }
+};
+
+console.log('✓ GameEngine stub loaded');
+
+// Try to load constants
+try {
+  GC = require('../shared/constants/gameConstants');
+  console.log('✓ GameConstants loaded successfully');
+} catch (e) {
+  console.log('⚠️  GameConstants not found, using defaults');
+  GC = { 
+    MAX_PIPS: 6, 
+    HAND_SIZE: 7,
+    DOMINO_SET: [] // Will be populated if needed
+  };
 }
+
+console.log('✓ Modules ready for connection testing');
 
 // ────────────────────────────────────────────────────────────────────────
 // Server Setup with Enhanced Error Handling
